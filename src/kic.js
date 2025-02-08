@@ -1,53 +1,55 @@
 
+function getKICApp(appelement){
+    return new KicApp(appelement);
+}
+
 class KicApp {
 
     #appElement; 
-    #pageData; 
+    #appData; 
+    #appDataProxy; 
 
     constructor(e) {
-        this.#appElement=e;
+        this.#appElement = e;
     }
 
-    mount(m) 
-    {
-        this.#pageData = this.#reactive(m);
+    mount(m) {
+        this.#appData = m;
+        this.#appDataProxy = this.#reactive((key, value) => { this.#updateDOM(key, value) }, m);
         this.#bindInputs();
-        Object.keys(this.#pageData ).forEach(key => this.#updateDOM(key, this.#pageData [key]));
+        Object.keys(this.#appDataProxy).forEach(key => this.#updateDOM(key, this.#appDataProxy[key]));
     }
 
-    #reactive(obj) {
-        return new Proxy(obj, {
-            get(target, key) {
-                return target[key];
-            },
-            set(target, key, value) {
+    #reactive(callback, data) {
+        return new Proxy(data, {
+            get: (target, key) => target[key],
+            set: (target, key, value) => {
                 target[key] = value;
-                this.parent.#updateDOM(key, value);
+                callback(key, value);  // Notify DOM update
                 return true;
             }
         });
     }
 
-    #bindInputs() 
-    {
-
-        this.#appElement.querySelectorAll("[kic-bind]").forEach(el => {
+    #bindInputs() {
+        const inputs = this.#appElement.querySelectorAll("[kic-bind]");
+        inputs.forEach(el => {
             const key = el.getAttribute("kic-bind");
             el.addEventListener("input", (event) => {
                 if (el.type === "checkbox") {
-                    this.#pageData[key] = el.checked;
+                    this.#appDataProxy[key] = el.checked;
                 } else if (el.type === "radio") {
-                    if (el.checked) this.#pageData[key] = el.value;
+                    if (el.checked) this.#appDataProxy[key] = el.value;
                 } else {
-                    this.#pageData[key] = el.value;
+                    this.#appDataProxy[key] = el.value;
                 }
             });
         });
     }
 
-    #updateDOM(key, value) 
-    {
-        this.#appElement.querySelectorAll(`[v-model="${key}"]`).forEach(el => {
+    #updateDOM(key, value) {
+        // Update input elements
+        this.#appElement.querySelectorAll(`[kic-bind="${key}"]`).forEach(el => {
             if (el.type === "checkbox") {
                 el.checked = value;
             } else if (el.type === "radio") {
@@ -56,13 +58,26 @@ class KicApp {
                 el.value = value;
             }
         });
-    
-        // Update displayed values
-        const displayEl = document.getElementById(`${key}Display`);
-        if (displayEl) {
-            displayEl.innerText = typeof value === "boolean" ? (value ? "Yes" : "No") : value;
-        }
+      
+        this.#interpolateDOM();
     }
 
+    #interpolateDOM() {
+        // Find all elements with text content containing {{key}}
+        this.#appElement.querySelectorAll('*').forEach(el => {
+            const elementsToUpdate = el.childNodes;
+            elementsToUpdate.forEach(node => {
+                if (node.nodeType === Node.TEXT_NODE) {
+                    let newText = node.textContent.replace(/\{\{\s*([\w]+)\s*\}\}/g, (match, key) => {
+                        // Use the key from the proxy to replace the placeholder
+                        return this.#appDataProxy[key] !== undefined ? this.#appDataProxy[key] : match;
+                    });
 
+                    if (newText !== node.textContent) {
+                        node.textContent = newText; // Update the text content
+                    }
+                }
+            });
+        });
+    }
 }

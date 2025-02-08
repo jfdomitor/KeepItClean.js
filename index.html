@@ -14,19 +14,17 @@
 
         <label>
             Name:
-            <input type="text" kis-bind="name">
+            <input type="text" kic-bind="name">
         </label>
         <p>Hello {{ name }}</p>
 
     </div>
-
-    <script src="./src/kic.js" />
        
-    <script type="javascript">
-
+    <script src="./src/kic.js"></script>
+    <script>
         var data = { name: ""};
         var appElement = document.getElementById("app");
-        var kicapp = new KicApp(appElement);
+        var kicapp = getKICApp(appElement);
         kicapp.mount(data);
 
         
