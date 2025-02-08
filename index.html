@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KIC Examples</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; padding: 20px; }
+    </style>
+</head>
+<body>
+
+    <div id="app">
+
+        <label>
+            Name:
+            <input type="text" kis-bind="name">
+        </label>
+        <p>Hello {{ name }}</p>
+
+    </div>
+
+    <script src="./src/kic.js" />
+       
+    <script type="javascript">
+
+        var data = { name: ""};
+        var appElement = document.getElementById("app");
+        var kicapp = new KicApp(appElement);
+        kicapp.mount(data);
+
+        
+    </script>
+
+</body>
+</html>
