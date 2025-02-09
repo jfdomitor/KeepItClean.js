@@ -10,27 +10,88 @@
 </head>
 <body>
 
+    <!-- npx live-server --port=5500 -->
     <div id="app">
 
         <label>
-            Name:
-            <input type="text" kic-bind="name">
+            First Name:
+            <input type="text" kic-bind="kic.model.name">
         </label>
+
+        <label>
+            Last Name:
+            <input type="text" kic-bind="kic.test.name">
+        </label>
+
+        <br />
+        <br />
+
+        <button onclick="handleShowHide()">Edit</button>
+
+        <div kic-hide="kic.settings.edit">
+            <h4>Cars</h4>
+            <table>
+                <thead>
+                    <tr>
+                        <td>No</td>
+                        <td>Brand</td>
+                        <td>Serial</td>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr kic-foreach="kic.model.cars">
+                        <td>{{index}}</td>
+                        <td>{{parent.brand}}</td>
+                        <td>{{parent.serial}}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div kic-show="kic.settings.edit">
+            <h4>Cars</h4>
+            <table>
+                <thead>
+                    <tr>
+                        <td>Brand</td>
+                        <td>Serial</td>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr kic-foreach="kic.model.cars">
+                        <td><input type="text" kic-bind="parent.brand"></td>
+                        <td><input type="text" kic-bind="parent.serial"></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <br />
+        <br />
+
         <p>{{ kic }}</p>
-        <p>{{ kic.name }}</p>
-        <p>{{ kic.cars }}</p>
-        <p>{{ kic.cars[1] }}</p>
-        <p>{{ kic.cars[1].brand }}</p>
-        <p>{{ kic.name}}, {{ kic.cars[0].brand}} </p>
+        <p>{{ kic.model.name }}</p>
+        <p>{{ kic.model.cars }}</p>
+        <p>{{ kic.model.cars[1] }}</p>
+        <p>{{ kic.model.cars[1].brand }}</p>
+        <p>{{ kic.model.name}}, {{ kic.model.cars[0].brand}}, {{ kic.model.colors[1] }} </p>
 
     </div>
        
     <script src="./src/kic.js"></script>
     <script>
-        var data = { name: "Johnny", cars:[{brand:"Volvo", serial:"v1234"}, {brand:"Ford", serial:"f2345"}]};
+        var dataset = { test:{name:"Andersson"}, settings:{ edit:true }, model:{ name: "Johnny", cars:[{brand:"Volvo", serial:"v1234"}, {brand:"Ford", serial:"f2345"}]}};
         var appElement = document.getElementById("app");
         var kicapp = getKICApp(appElement);
-        kicapp.mount(data);
+        kicapp.mount(dataset);
+
+        function handleShowHide()
+        {
+            var t = kicapp.getData();
+            t.settings.edit = !t.settings.edit;
+            t.model.newstuff="hello";
+            t.model.colors=["green","red"];
+        }
 
         
     </script>
