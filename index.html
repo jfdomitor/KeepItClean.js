@@ -16,13 +16,18 @@
             Name:
             <input type="text" kic-bind="name">
         </label>
-        <p>Hello {{ name }}</p>
+        <p>{{ kic }}</p>
+        <p>{{ kic.name }}</p>
+        <p>{{ kic.cars }}</p>
+        <p>{{ kic.cars[1] }}</p>
+        <p>{{ kic.cars[1].brand }}</p>
+        <p>{{ kic.name}}, {{ kic.cars[0].brand}} </p>
 
     </div>
        
     <script src="./src/kic.js"></script>
     <script>
-        var data = { name: ""};
+        var data = { name: "Johnny", cars:[{brand:"Volvo", serial:"v1234"}, {brand:"Ford", serial:"f2345"}]};
         var appElement = document.getElementById("app");
         var kicapp = getKICApp(appElement);
         kicapp.mount(data);
