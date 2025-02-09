@@ -149,76 +149,50 @@ class KicApp {
 
     #interpolateDOM() {
 
-        const flatappdata = this.#flattenObject(this.#appDataProxy);
+       if (this.#interpolatedElements.length===0)
+            return;
 
-        var expressions = [];
+        let expressions = [];
         this.#interpolatedElements.forEach(({ element, node, originalText }) => {
             const elexp = originalText.match(/\{\{(.*?)\}\}/g);
             elexp.forEach((obj, key) => { expressions.push(obj); });
         });
 
-        if (expressions) {
-            expressions.forEach(expression => {
-                var expr = expression.replace(/\{\{\s*|\s*\}\}/g, '');
-                this.#interpolatedElements.forEach(({ element, node, originalText }) => {
+        if (expressions.length>0) 
+        {
+            const flatappdata = this.#flattenAppData(this.#appDataProxy, 'kic');
+
+            this.#interpolatedElements.forEach(({ element, node, originalText }) => {
+                var value_to_print = originalText;
+                expressions.forEach(expression => {
+
+                    var expr = expression.replace(/\{\{\s*|\s*\}\}/g, '');
+
                     if (originalText.includes(expr))
                     {
-                        const data = flatappdata[expr];
-                        var value_to_print = "";
-
-                        if (Array.isArray(data)) {
-                            value_to_print = `${JSON.stringify(data, null, 2)}`;
-                        }else if (typeof data === 'object' && data !== null) {
-                            value_to_print = `${JSON.stringify(data, null, 2)}`;
-                        }else{
-                            value_to_print = data;
+                        const data = expr.toLowerCase() === 'kic' ? this.#appDataProxy : flatappdata[expr];
+                        if (data)
+                        {
+                            value_to_print = value_to_print.replace(expression, 
+                                typeof data === 'object' && data !== null ? JSON.stringify(data, null, 2) : data
+                            );
                         }
-
-                
-                        if (value_to_print !== node.textContent) {
-                            node.textContent = value_to_print;
-                        }
-
                         
                     }
 
                 });
 
+                if (value_to_print && (value_to_print !== node.textContent)) {
+                    node.textContent = value_to_print;
+                }
+
             });
         }
 
-        // Update each interpolated element dynamically based on the current app data
-        // this.#interpolatedElements.forEach(({ element, node, originalText }) => {
-        //     let newText = originalText.replace(/\{\{\s*kic(\.(\w+(\[\d+\])?)?)?\s*\}\}/g, (match, path) => {
-        //         if (!path) {
-        //             // If the path is just 'kic', return the whole appDataProxy as pretty-printed JSON
-        //             return `${JSON.stringify(this.#appDataProxy, null, 2)}`;
-        //         }
-
-        //         const value = this.#getNestedValue(path);
-
-        //         if (Array.isArray(value)) {
-        //             // If it's an array, format it nicely (display the whole array)
-        //             return `${JSON.stringify(value, null, 2)}`;
-        //         } else if (typeof value === 'object') {
-        //             // If it's an object, pretty print it
-        //             return `${JSON.stringify(value, null, 2)}`;
-        //         } else if (typeof value !== 'undefined') {
-        //             // If it's a primitive value, just show it
-        //             return value;
-        //         }
-
-        //         return match;  // If not found, return the original string
-        //     });
-
-        //     // Only update if the text has changed
-        //     if (newText !== node.textContent) {
-        //         node.textContent = newText;
-        //     }
-        // });
     }
 
-    #flattenObject(obj, parentKey = '') {
+    //Flattens any complex json object to a one level json
+    #flattenAppData(obj, parentKey = '') {
         let result = {};
     
         for (const key in obj) {
@@ -226,16 +200,17 @@ class KicApp {
                 const newKey = parentKey ? `${parentKey}.${key}` : key;
                 if (typeof obj[key] === 'object' && obj[key] !== null) {
                     if (Array.isArray(obj[key])) {
+                        result[newKey] = obj[key]; 
                         obj[key].forEach((item, index) => {
-                            // If it's an array, we append the index to the key
-                            Object.assign(result, this.#flattenObject(item, `${newKey}[${index}]`));
+                            result[`${newKey}[${index}]`] = item; 
+                            Object.assign(result, this.#flattenAppData(item, `${newKey}[${index}]`));
                         });
                     } else {
-                        // It's an object, recurse into it
-                        Object.assign(result, this.#flattenObject(obj[key], newKey));
+                        result[newKey] = obj[key]; 
+                        Object.assign(result, this.#flattenAppData(obj[key], newKey));
                     }
                 } else {
-                    result[newKey] = obj[key];  // Directly assign the primitive value
+                    result[newKey] = obj[key];  
                 }
             }
         }
