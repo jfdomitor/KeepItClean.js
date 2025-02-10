@@ -27,6 +27,7 @@
         <br />
 
         <button onclick="handleShowHide()">Edit</button>
+        <button onclick="handleAddCar()">Add</button>
 
         <div kic-hide="kic.settings.edit">
             <h4>Cars</h4>
@@ -40,7 +41,7 @@
                 </thead>
                 <tbody>
                     <tr kic-foreach="car in kic.model.cars">
-                        <td>{{index}}</td>
+                        <td></td>
                         <td>{{car.brand}}</td>
                         <td>{{car.serial}}</td>
                     </tr>
@@ -91,6 +92,13 @@
             t.settings.edit = !t.settings.edit;
             t.model.newstuff="hello";
             t.model.colors=["green","red"];
+        }
+
+        function handleAddCar()
+        {
+            var car = {brand:"Audi", serial:"v8888"};
+            var t = kicapp.getData();
+            t.model.cars.push(car);
         }
 
         

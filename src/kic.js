@@ -17,8 +17,8 @@ class KicApp {
     mount(m) {
       
         this.#appData = m;
-        this.#appDataProxy = this.#reactive((key, value) => { 
-            this.#updateDOMOnChange(key, value);  // Update DOM elements like inputs
+        this.#appDataProxy = this.#createReactiveProxy((path, value) => { 
+            this.#updateDOMOnChange(path, value);  // Update DOM elements like inputs
             this.#interpolateDOM();  // Update interpolation after data change
         }, m);
         this.#bindForEach();
@@ -34,7 +34,7 @@ class KicApp {
     }
 
   
-    #reactive(callback, data, currentPath = "kic") {
+    #createReactiveProxy(callback, data, currentPath = "kic") {
         const handler = {
             get: (target, key) => {
                 const value = target[key];
@@ -45,7 +45,7 @@ class KicApp {
                     return this.#createArrayProxy(callback, value);
                 }
                 if (typeof value === 'object' && value !== null) {
-                    return this.#reactive(callback, value, newPath); // Recursively create a proxy
+                    return this.#createReactiveProxy(callback, value, newPath); // Recursively create a proxy
                 }
                 return value;
             },
@@ -140,8 +140,7 @@ class KicApp {
             const parent = template.parentElement;
             const tag_to_create = template.localName;
     
-            // Store original template & remove from DOM
-            const templateHTML = template.innerHTML;
+            const templateHTML = this.#cleanWhitespace(template.innerHTML);
             template.remove();
     
             // Function to render items
@@ -153,7 +152,15 @@ class KicApp {
                 boundArray.forEach(item => {
                     const newtag = document.createElement(tag_to_create);
 
-                    newtag.innerHTML = templateHTML.replace(itemName, arrayName+`[${counter}]`);
+                    let exprlist = this.#getInterpolations(templateHTML);
+                    if (exprlist.length>0)
+                    {
+                        let regex = new RegExp(itemName, "g");
+                        newtag.innerHTML = templateHTML.replace(regex, arrayName+`[${counter}]`);
+                    }
+                    else{
+                        newtag.innerHTML = templateHTML;
+                    }
 
                     parent.appendChild(newtag);
                     counter++;
@@ -163,14 +170,7 @@ class KicApp {
             // Initial render
             renderList();
     
-            // // Make it reactive
-            // this.#appDataProxy[arrayName] = new Proxy(this.#appDataProxy[arrayName] || [], {
-            //     set: (target, prop, value) => {
-            //         target[prop] = value;
-            //         renderList(); // Update UI when array changes
-            //         return true;
-            //     }
-            // });
+           
         });
     }
 
@@ -235,18 +235,38 @@ class KicApp {
     
     
     #collectInterpolatedElements() {
+
         // Collect all elements containing interpolation expressions
         const elements = this.#appElement.querySelectorAll('*');
         elements.forEach(el => {
             if (el.childNodes.length) {
                 el.childNodes.forEach(node => {
-                    if (node.nodeType === Node.TEXT_NODE && /\{\{\s*[\w\.\[\]]+\s*\}\}/.test(node.textContent)) {
-                        // Store element and the original text content
-                        this.#interpolatedElements.push({ element: el, node, originalText: node.textContent });
+                    if (node.nodeType === Node.TEXT_NODE) 
+                    {
+                        var expressions = this.#getInterpolations(node.textContent);
+                        if (expressions.length>0){
+                            this.#interpolatedElements.push({ element: el, node, originalText: node.textContent, expressions });
+                        }
                     }
                 });
             }
         });
+    }
+
+    #addInterpolatedElement(el) 
+    {
+
+            if (el.childNodes.length) {
+                el.childNodes.forEach(node => {
+                    if (node.nodeType === Node.TEXT_NODE) 
+                    {
+                        var expressions = this.#getInterpolations(node.textContent);
+                        if (expressions.length>0){
+                            this.#interpolatedElements.push({ element: el, node, originalText: node.textContent, expressions });
+                        }
+                    }
+                });
+            }
     }
 
     #interpolateDOM() {
@@ -254,42 +274,11 @@ class KicApp {
        if (this.#interpolatedElements.length===0)
             return;
 
-        let expressions = [];
-        this.#interpolatedElements.forEach(({ element, node, originalText }) => {
-            const elexp = originalText.match(/\{\{(.*?)\}\}/g);
-            elexp.forEach((obj, key) => { expressions.push(obj); });
-        });
+       this.#interpolatedElements.forEach(({ element, node, originalText, expressions }) => {
+            const nodetext = this.#updateInterpolations(originalText, this.#appDataProxy);
+            node.textContent = nodetext;
 
-        if (expressions.length>0) 
-        {
-            const flatappdata = this.#flattenAppData(this.#appDataProxy, 'kic');
-
-            this.#interpolatedElements.forEach(({ element, node, originalText }) => {
-                var value_to_print = originalText;
-                expressions.forEach(expression => {
-
-                    var expr = expression.replace(/\{\{\s*|\s*\}\}/g, '');
-
-                    if (originalText.includes(expr))
-                    {
-                        const data = expr.toLowerCase() === 'kic' ? this.#appDataProxy : flatappdata[expr];
-                        if (data)
-                        {
-                            value_to_print = value_to_print.replace(expression, 
-                                typeof data === 'object' && data !== null ? JSON.stringify(data, null, 2) : data
-                            );
-                        }
-                        
-                    }
-
-                });
-
-                if (value_to_print && (value_to_print !== node.textContent)) {
-                    node.textContent = value_to_print;
-                }
-
-            });
-        }
+       });
 
     }
 
@@ -308,10 +297,9 @@ class KicApp {
         return target;
     }
 
-    //Flattens any complex json object to a one level json
+
     #flattenAppData(obj, parentKey = '') {
         let result = {};
-    
         for (const key in obj) {
             if (obj.hasOwnProperty(key)) {
                 const newKey = parentKey ? `${parentKey}.${key}` : key;
@@ -333,6 +321,58 @@ class KicApp {
         }
     
         return result;
+    }
+
+    #cleanWhitespace(html) 
+    {
+        return html
+            .replace(/>\s+</g, '><')  // Remove spaces between tags
+            .replace(/(\S)\s{2,}(\S)/g, '$1 $2'); // Reduce multiple spaces to one inside text nodes
+    }
+
+    #getInterpolations(str) {
+        const regex = /{{(.*?)}}/g;
+        let matches = [];
+        let match;
+    
+        while ((match = regex.exec(str)) !== null) {
+            matches.push(match[1].trim()); // Trim spaces inside {{ }}
+        }
+    
+        return matches;
+    }
+
+    #updateInterpolations(str, context = {}) {
+        return str.replace(/{{(.*?)}}/g, (_, expression) => {
+            try 
+            {
+
+                // Trim the expression to remove extra spaces
+                expression = expression.trim();
+    
+                // If the expression is just the variable name (e.g., `kic`), return the full context of it
+                if (expression.toLowerCase()=='kic') {
+                    return JSON.stringify(context);
+                }
+
+                if (expression.toLowerCase().includes('kic.'))
+                {
+                    let regex = new RegExp('kic.', "g");
+                    expression = expression.replace(regex, '');
+                }
+    
+                // Use the Function constructor to evaluate the expression dynamically
+                let result = new Function(...Object.keys(context), `return ${expression}`)(...Object.values(context));
+    
+                // If the result is an object, convert it to JSON string for better display
+                return typeof result === "object" ? JSON.stringify(result) : result;
+
+            } catch (error) {
+                expression='kic.'+expression;
+                console.warn(`Error evaluating: {{${expression}}}`, error);
+                return `{{${expression}}}`; // Keep the original interpolation if an error occurs
+            }
+        });
     }
     
     
