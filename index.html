@@ -39,10 +39,10 @@
                     </tr>
                 </thead>
                 <tbody>
-                    <tr kic-foreach="kic.model.cars">
+                    <tr kic-foreach="car in kic.model.cars">
                         <td>{{index}}</td>
-                        <td>{{parent.brand}}</td>
-                        <td>{{parent.serial}}</td>
+                        <td>{{car.brand}}</td>
+                        <td>{{car.serial}}</td>
                     </tr>
                 </tbody>
             </table>
@@ -58,9 +58,9 @@
                     </tr>
                 </thead>
                 <tbody>
-                    <tr kic-foreach="kic.model.cars">
-                        <td><input type="text" kic-bind="parent.brand"></td>
-                        <td><input type="text" kic-bind="parent.serial"></td>
+                    <tr kic-foreach="car in kic.model.cars">
+                        <td><input type="text" kic-bind="car.brand"></td>
+                        <td><input type="text" kic-bind="car.serial"></td>
                     </tr>
                 </tbody>
             </table>

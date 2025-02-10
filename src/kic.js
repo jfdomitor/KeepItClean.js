@@ -15,14 +15,16 @@ class KicApp {
     }
 
     mount(m) {
-        this.#collectInterpolatedElements(); // Collect all interpolated elements on load
+      
         this.#appData = m;
         this.#appDataProxy = this.#reactive((key, value) => { 
-            this.#updateDOM(key, value);  // Update DOM elements like inputs
+            this.#updateDOMOnChange(key, value);  // Update DOM elements like inputs
             this.#interpolateDOM();  // Update interpolation after data change
         }, m);
+        this.#bindForEach();
         this.#bindInputs();
         this.#refreshDOMFromData(this.#appDataProxy, 'kic');
+        this.#collectInterpolatedElements(); // Collect all interpolated elements on load
         this.#interpolateDOM();  // Initial interpolation on page load
     }
 
@@ -31,33 +33,26 @@ class KicApp {
         return this.#appDataProxy;
     }
 
-    #reactive(callback, data) {
+  
+    #reactive(callback, data, currentPath = "kic") {
         const handler = {
             get: (target, key) => {
                 const value = target[key];
+                const newPath = Array.isArray(target) ? `${currentPath}[${key}]` : `${currentPath}.${key}`;
+
                 // If it's an object or array, make it reactive too
                 if (Array.isArray(value)) {
                     return this.#createArrayProxy(callback, value);
                 }
                 if (typeof value === 'object' && value !== null) {
-                    return this.#reactive(callback, value); // Recursively create a proxy
+                    return this.#reactive(callback, value, newPath); // Recursively create a proxy
                 }
                 return value;
             },
             set: (target, key, value) => {
-                const paths = key.split('.');
-                let valuepath ="";
-                paths.forEach(path => {
-                    if (path.toLowerCase()!=='kic') {
-                        let tempobj = target[path];
-                        if (typeof tempobj === 'object' && tempobj !== null)
-                            target=tempobj;
-
-                        valuepath=path;
-                    }
-                });
-                target[valuepath] = value;
-                callback(key, value);
+                target[key] = value;
+                const path = Array.isArray(target) ? `${currentPath}[${key}]` : `${currentPath}.${key}`;
+                callback(path, value);
                 return true;
             }
         };
@@ -91,18 +86,96 @@ class KicApp {
     #bindInputs() {
         const inputs = this.#appElement.querySelectorAll("[kic-bind]");
         inputs.forEach(el => {
-            const key = el.getAttribute("kic-bind");
+
+            const path = el.getAttribute("kic-bind");
+            if (!path)
+                return;
+            if (!path.includes('.'))
+                return;
+
             el.addEventListener("input", (event) => {
-                if (el.type === "checkbox") {
-                    this.#appDataProxy[key] = el.checked;
-                } else if (el.type === "radio") {
-                    if (el.checked) this.#appDataProxy[key] = el.value;
-                } else {
-                    this.#appDataProxy[key] = el.value;
+
+                const keys = path.split('.');
+                let valuekey = null;
+                let target=null;
+                keys.forEach(key => {
+                    if (key.toLowerCase()!=='kic')
+                    {
+                        if (typeof this.#appDataProxy[key] === 'object') 
+                            target = this.#appDataProxy[key];
+
+                            valuekey=key;
+                    }
+    
+                });
+    
+                if (!valuekey)
+                    return;
+                if (!target)
+                    return;
+
+
+                if (el.type === "checkbox") 
+                {
+                    target[valuekey] = el.checked;
+                } 
+                else if (el.type === "radio") 
+                {
+                    if (el.checked)
+                        target[valuekey] = el.value;
+                } 
+                else 
+                {
+                    target[valuekey] = el.value;
                 }
             });
         });
     }
+
+    #bindForEach() {
+        this.#appElement.querySelectorAll("[kic-foreach]").forEach(template => {
+
+            const expression = template.getAttribute("kic-foreach"); // "cars"
+            let [itemName, arrayName] = expression.split(" in ").map(s => s.trim()); // Not used yet
+            const parent = template.parentElement;
+            const tag_to_create = template.localName;
+    
+            // Store original template & remove from DOM
+            const templateHTML = template.innerHTML;
+            template.remove();
+    
+            // Function to render items
+            const renderList = () => {
+                parent.innerHTML = ""; // Clear list
+                const boundArray = this.#getValueByPath(arrayName);
+                let counter=0;
+
+                boundArray.forEach(item => {
+                    const newtag = document.createElement(tag_to_create);
+
+                    newtag.innerHTML = templateHTML.replace(itemName, arrayName+`[${counter}]`);
+
+                    parent.appendChild(newtag);
+                    counter++;
+                });
+            };
+    
+            // Initial render
+            renderList();
+    
+            // // Make it reactive
+            // this.#appDataProxy[arrayName] = new Proxy(this.#appDataProxy[arrayName] || [], {
+            //     set: (target, prop, value) => {
+            //         target[prop] = value;
+            //         renderList(); // Update UI when array changes
+            //         return true;
+            //     }
+            // });
+        });
+    }
+
+    
+    
 
     #refreshDOMFromData(obj, path)
     {
@@ -112,7 +185,7 @@ class KicApp {
             if (tempobj !== undefined && tempobj !== null){
                 if (typeof tempobj !== 'object')
                 {
-                    this.#updateDOM(path+'.'+key, tempobj);
+                    this.#updateDOMOnChange(path+'.'+key, tempobj);
                 }
                 else
                 {
@@ -122,7 +195,7 @@ class KicApp {
         });
     }
 
-    #updateDOM(path, value) {
+    #updateDOMOnChange(path, value) {
         this.#appElement.querySelectorAll(`[kic-bind="${path}"]`).forEach(el => {
             if (Array.isArray(value)) {
                 // Handle array rendering (e.g., rendering list items)
@@ -155,7 +228,11 @@ class KicApp {
                  el.style.display = "none";
             }
          });
+
+        
     }
+
+    
     
     #collectInterpolatedElements() {
         // Collect all elements containing interpolation expressions
@@ -214,6 +291,21 @@ class KicApp {
             });
         }
 
+    }
+
+    #getValueByPath(path)
+    {
+        const keys = path.split('.');
+        let target = this.#appDataProxy;
+        keys.forEach(key => {
+            if (key.toLowerCase()!=='kic')
+            {
+                if (target)
+                    target = target[key];
+            }
+        });
+
+        return target;
     }
 
     //Flattens any complex json object to a one level json
