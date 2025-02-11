@@ -46,7 +46,7 @@
                         <td></td>
                         <td>{{car.brand}}</td>
                         <td>{{car.serial}}</td>
-                        <td><button kic-click="handleDeleteCar(car)">Delete</button></td>
+                        <td><button kic-click="handleDeleteCar(event, car)">Delete</button></td>
                     </tr>
                 </tbody>
             </table>
@@ -80,7 +80,7 @@
         <p>{{ kic.model.cars }}</p>
         <p>{{ kic.model.cars[1] }}</p>
         <p>{{ kic.model.cars[1].brand }}</p>
-        <p>{{ kic.model.lname}}, {{ kic.model.cars[0].brand}}, {{ kic.model.colors[1] }} </p>
+        <p>{{ kic.model.lname}}, {{ kic.model.cars[0].brand}} }} </p>
 
     </div>
        
@@ -88,11 +88,20 @@
     <script>
         var dataset = { settings:{ edit:true }, model:{ fname: "Johnny", lname: "Andersson", cars:[{brand:"Volvo", serial:"v1234"}, {brand:"Ford", serial:"f2345"}]}, count:0};
         var appElement = document.getElementById("app");
-        var kicapp = getKICApp(dataset);
+        var kicapp = getKICApp(dataset, true);
 
-        kicapp.addHandler("handleDeleteCar", function(event) 
+        kicapp.addHandler("handleDeleteCar", function(event, data) 
         {
-            this.count++;  //Refers to tha data proxy in KIC
+            var t = this.getData();
+            // Find the index of the car with id 2
+            const indexToRemove = t.model.cars.findIndex(car => car.kicId === data.kicId);
+
+            // If the car is found, remove it using splice
+            if (indexToRemove !== -1) {
+                t.model.cars.splice(indexToRemove, 1);  // Remove the car at index found
+            }
+
+            t.count++;
             console.log("Clicked! Count:", this.count);
         });
 
@@ -106,8 +115,6 @@
         {
             var t = kicapp.getData();
             t.settings.edit = !t.settings.edit;
-            t.model.newstuff="hello";
-            t.model.colors=["green","red"];
         }
 
         //Regular JS onClick Handler

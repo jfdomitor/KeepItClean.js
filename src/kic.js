@@ -1,10 +1,12 @@
 
-function getKICApp(data){
-    return new KicApp(data);
+function getKICApp(data, enableInternalId){
+    return new KicApp(data, enableInternalId);
 }
 
 class KicApp {
 
+    #kicId=0;
+    #enableKicId = false;
     #appElement; 
     #appData; 
     #appDataProxy; 
@@ -13,8 +15,9 @@ class KicApp {
     #inputBindings = []; 
     #eventHandlers = {};
 
-    constructor(data) {
+    constructor(data, enableInternalId) {
         this.#appData = data;
+        this.#enableKicId=enableInternalId;
     }
 
     mount(element) 
@@ -25,6 +28,10 @@ class KicApp {
             this.#updateDOMOnChange(path, value);  // Update DOM elements like inputs
             this.#interpolateDOM();  // Update interpolation after data change
         }, this.#appData);
+        if (this.#enableKicId && ! this.#appDataProxy.hasOwnProperty('kicId')) 
+        {
+            this.#appDataProxy.kicId = ++this.#kicId;  // Assign a new unique ID
+        }
         this.#collectInputBindings();
         this.#bindInputs();
         this.#collectForEachTemplates(); 
@@ -55,8 +62,22 @@ class KicApp {
                 const value = target[key];
                 const newPath = Array.isArray(target) ? `${currentPath}[${key}]` : `${currentPath}.${key}`;
 
+                 // Only add kicId if the feature is enabled and it's an object
+                 if (this.#enableKicId && typeof value === 'object' && value !== null && !value.hasOwnProperty('kicId')) 
+                {
+                    value.kicId = ++this.#kicId;  // Assign a new unique ID
+                }
+
                 // If it's an object or array, make it reactive too
                 if (Array.isArray(value)) {
+                    if (this.#enableKicId) {
+                        // Check and add kicId to all objects in the array after modification
+                        for (let obj of value) {
+                            if (typeof obj === 'object' && obj !== null && !obj.hasOwnProperty('kicId')) {
+                                obj.kicId = ++this.#kicId;
+                            }
+                        }
+                    }
                     return this.#createArrayProxy(callback, value,newPath);
                 }
                 if (typeof value === 'object' && value !== null) {
@@ -65,6 +86,11 @@ class KicApp {
                 return value;
             },
             set: (target, key, value) => {
+                if (this.#enableKicId && typeof value === 'object' && value !== null && !value.hasOwnProperty('kicId')) 
+                {
+                    value.kicId = ++this.#kicId;  // Assign kicId to any new objects
+                }
+
                 target[key] = value;
                 const path = Array.isArray(target) ? `${currentPath}[${key}]` : `${currentPath}.${key}`;
                 callback(path, value);
@@ -81,6 +107,16 @@ class KicApp {
                 if (['push', 'pop', 'splice', 'shift', 'unshift'].includes(key)) {
                     return (...args) => {
                         const result = Array.prototype[key].apply(target, args);
+
+                        if (this.#enableKicId) {
+                            // Check and add kicId to all objects in the array after modification
+                            for (let obj of target) {
+                                if (typeof obj === 'object' && obj !== null && !obj.hasOwnProperty('kicId')) {
+                                    obj.kicId = ++this.#kicId;
+                                }
+                            }
+                        }
+
                         callback(path, target); // Trigger DOM update on array changes
                         return result;
                     };
@@ -88,6 +124,12 @@ class KicApp {
                 return target[key];
             },
             set: (target, key, value) => {
+
+                if (this.#enableKicId && typeof value === 'object' && value !== null && !value.hasOwnProperty('kicId')) 
+                {
+                    value.kicId = ++this.#kicId;   // Assign kicId
+                }
+
                 target[key] = value;
                 callback(path, target); // Update DOM when an index is modified
                 return true;
@@ -239,10 +281,22 @@ class KicApp {
                      newtag.innerHTML = template.templateHTML;
                 }
 
-                newtag.dataset.kicPath = `${arrayName}[${counter}]`;
+                newtag.setAttribute("kic-path", `${arrayName}[${counter}]`);
+                newtag.setAttribute("kic-index", counter);
                 newtag.dataset.kicIndex = counter;
                 template.parentElement.appendChild(newtag);
+              
+
+                //Add references to click andlers
+                newtag.querySelectorAll("[kic-click]").forEach(el => 
+                {
+                    el.setAttribute("kic-path", `${arrayName}[${counter}]`);
+                    el.setAttribute("kic-index", counter);
+                });
+
                 counter++;
+
+                
             });
            
         });
@@ -273,12 +327,17 @@ class KicApp {
                         if (arg === "event") 
                             return event; // Allow `event` as a parameter
 
-                        return ""; // Resolve object references
+                        const path = event.target.getAttribute("kic-path"); // "cars"
+                        if (path)
+                            return this.#getValueByPath(path);
+                        else
+                           return this.#getValueByPath(arg);
+
                     });
                     
                     // Call the function from the handlers object
                     if (this.#eventHandlers[functionName]) {
-                        this.#eventHandlers[functionName].apply(this.#appDataProxy, args);
+                        this.#eventHandlers[functionName].apply(this, args);
                     } else {
                         console.warn(`Handler function '${functionName}' not found.`);
                     }
@@ -336,6 +395,7 @@ class KicApp {
         this.#foreachTemplates.forEach(template => {
             if (template.expression.includes(path)) {
                 this.#bindForEach(); // Rerun the binding to re-render elements
+                this.#bindClickEvents();
             }
         });
     
