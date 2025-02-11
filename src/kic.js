@@ -1,6 +1,6 @@
 
-function getKICApp(appelement){
-    return new KicApp(appelement);
+function getKICApp(data){
+    return new KicApp(data);
 }
 
 class KicApp {
@@ -9,20 +9,25 @@ class KicApp {
     #appData; 
     #appDataProxy; 
     #interpolatedElements = []; 
+    #foreachTemplates = []; 
+    #inputBindings = []; 
 
-    constructor(e) {
-        this.#appElement = e;
+    constructor(data) {
+        this.#appData = data;
     }
 
-    mount(m) {
+    mount(element) 
+    {
       
-        this.#appData = m;
+        this.#appElement = element;
         this.#appDataProxy = this.#createReactiveProxy((path, value) => { 
             this.#updateDOMOnChange(path, value);  // Update DOM elements like inputs
             this.#interpolateDOM();  // Update interpolation after data change
-        }, m);
-        this.#bindForEach();
+        }, this.#appData);
+        this.#collectInputBindings();
         this.#bindInputs();
+        this.#collectForEachTemplates(); 
+        this.#bindForEach();
         this.#refreshDOMFromData(this.#appDataProxy, 'kic');
         this.#collectInterpolatedElements(); // Collect all interpolated elements on load
         this.#interpolateDOM();  // Initial interpolation on page load
@@ -42,7 +47,7 @@ class KicApp {
 
                 // If it's an object or array, make it reactive too
                 if (Array.isArray(value)) {
-                    return this.#createArrayProxy(callback, value);
+                    return this.#createArrayProxy(callback, value,newPath);
                 }
                 if (typeof value === 'object' && value !== null) {
                     return this.#createReactiveProxy(callback, value, newPath); // Recursively create a proxy
@@ -60,13 +65,13 @@ class KicApp {
         return new Proxy(data, handler);
     }
     
-    #createArrayProxy(callback, array) {
+    #createArrayProxy(callback, array, path = "") {
         const arrayHandler = {
             get: (target, key) => {
-                if (key === 'push' || key === 'pop' || key === 'splice') {
+                if (['push', 'pop', 'splice', 'shift', 'unshift'].includes(key)) {
                     return (...args) => {
                         const result = Array.prototype[key].apply(target, args);
-                        callback(key, args);  // Trigger DOM update on array changes
+                        callback(path, target); // Trigger DOM update on array changes
                         return result;
                     };
                 }
@@ -74,28 +79,46 @@ class KicApp {
             },
             set: (target, key, value) => {
                 target[key] = value;
-                callback(key, value);
+                callback(path, target); // Update DOM when an index is modified
                 return true;
             }
         };
         
         return new Proxy(array, arrayHandler);
     }
+    
 
 
-    #bindInputs() {
+    #collectInputBindings() {
         const inputs = this.#appElement.querySelectorAll("[kic-bind]");
         inputs.forEach(el => {
 
-            const path = el.getAttribute("kic-bind");
-            if (!path)
-                return;
-            if (!path.includes('.'))
-                return;
+            let isValid = true;
 
-            el.addEventListener("input", (event) => {
+            const bindingpath = el.getAttribute("kic-bind");
+            if (!bindingpath)
+                isValid=false;
+            if (!bindingpath.includes('.'))
+                isValid=false;
 
-                const keys = path.split('.');
+            const isDuplicate = this.#inputBindings.some(item => 
+                item.element === el && item.path === bindingpath
+            );
+
+            if (!isDuplicate && isValid)
+                this.#inputBindings.push({element: el, path:bindingpath});
+
+
+        });
+    }
+
+    #bindInputs() {
+      
+        this.#inputBindings.forEach(item => {
+
+            item.element.addEventListener("input", (event) => {
+
+                const keys = item.path.split('.');
                 let valuekey = null;
                 let target=null;
                 keys.forEach(key => {
@@ -115,63 +138,86 @@ class KicApp {
                     return;
 
 
-                if (el.type === "checkbox") 
+                if ( item.element.type === "checkbox") 
                 {
-                    target[valuekey] = el.checked;
+                    target[valuekey] =  item.element.checked;
                 } 
-                else if (el.type === "radio") 
+                else if ( item.element.type === "radio") 
                 {
-                    if (el.checked)
-                        target[valuekey] = el.value;
+                    if ( item.element.checked)
+                        target[valuekey] =  item.element.value;
                 } 
                 else 
                 {
-                    target[valuekey] = el.value;
+                    target[valuekey] =  item.element.value;
                 }
             });
         });
     }
 
-    #bindForEach() {
+    #collectForEachTemplates() 
+    {
         this.#appElement.querySelectorAll("[kic-foreach]").forEach(template => {
 
-            const expression = template.getAttribute("kic-foreach"); // "cars"
-            let [itemName, arrayName] = expression.split(" in ").map(s => s.trim()); // Not used yet
+            const expr = template.getAttribute("kic-foreach"); // "cars"
             const parent = template.parentElement;
-            const tag_to_create = template.localName;
-    
-            const templateHTML = this.#cleanWhitespace(template.innerHTML);
-            template.remove();
-    
-            // Function to render items
-            const renderList = () => {
-                parent.innerHTML = ""; // Clear list
-                const boundArray = this.#getValueByPath(arrayName);
-                let counter=0;
+            const tagname = template.localName;
+            const html = this.#cleanWhitespace(template.innerHTML);
+            let isValid=true;
 
-                boundArray.forEach(item => {
-                    const newtag = document.createElement(tag_to_create);
+            if (!expr)
+                isValid=false;
+            if (!tagname)
+                isValid=false;
+            if (!html)
+                isValid=false;
+            if (!parent)
+                isValid=false;
 
-                    let exprlist = this.#getInterpolations(templateHTML);
-                    if (exprlist.length>0)
-                    {
-                        let regex = new RegExp(itemName, "g");
-                        newtag.innerHTML = templateHTML.replace(regex, arrayName+`[${counter}]`);
-                    }
-                    else{
-                        newtag.innerHTML = templateHTML;
-                    }
+            const isDuplicate = this.#foreachTemplates.some(item => 
+                item.parentElement === parent && item.expression === expr
+            );
 
-                    parent.appendChild(newtag);
-                    counter++;
-                });
-            };
-    
-            // Initial render
-            renderList();
-    
+            if (!isDuplicate && isValid)
+            {
+                this.#foreachTemplates.push({parentElement: parent, expression:expr, templateTagName: tagname, templateHTML: html});
+                template.remove();
+            }
+            
+        });
+    }
+
+    #bindForEach() {
+
+        let updateInterpolations = false;
+        this.#foreachTemplates.forEach(template => {
+
+
+            let [itemName, arrayName] = template.expression.split(" in ").map(s => s.trim());
+            template.parentElement.innerHTML = ""; // Clear list
+            const foreachArray = this.#getValueByPath(arrayName);
+            let counter=0;
+            foreachArray.forEach(item => {
+                const newtag = document.createElement(template.templateTagName);
+                let exprlist = this.#getInterpolations(template.templateHTML);
+                if (exprlist.length>0)
+                {
+                    let regex = new RegExp(itemName, "g");
+                    newtag.innerHTML = template.templateHTML.replace(regex, arrayName+`[${counter}]`);
+                    updateInterpolations=true;
+                }
+                else{
+                     newtag.innerHTML = template.templateHTML;
+                }
+
+                template.parentElement.appendChild(newtag);
+                counter++;
+            });
            
         });
+
+        if (updateInterpolations)
+            this.#collectInterpolatedElements();
     }
 
     
@@ -198,7 +244,6 @@ class KicApp {
     #updateDOMOnChange(path, value) {
         this.#appElement.querySelectorAll(`[kic-bind="${path}"]`).forEach(el => {
             if (Array.isArray(value)) {
-                // Handle array rendering (e.g., rendering list items)
                 el.innerHTML = value.map(item => `<li>${item}</li>`).join('');
             } else if (el.type === "checkbox") {
                 el.checked = value;
@@ -208,66 +253,61 @@ class KicApp {
                 el.value = value;
             }
         });
-
-        this.#appElement.querySelectorAll(`[kic-hide="${path}"]`).forEach(el => {
-           if (value){
-                el.style.display = "none";
-           }
-           else
-           {
-                el.style.display = "";
-           }
+    
+        // Detect if this update affects a kic-foreach template
+        this.#foreachTemplates.forEach(template => {
+            if (template.expression.includes(path)) {
+                this.#bindForEach(); // Rerun the binding to re-render elements
+            }
         });
-
+    
+        this.#appElement.querySelectorAll(`[kic-hide="${path}"]`).forEach(el => {
+            el.style.display = value ? "none" : "";
+        });
+    
         this.#appElement.querySelectorAll(`[kic-show="${path}"]`).forEach(el => {
-            if (value){
-                 el.style.display = "";
-            }
-            else
-            {
-                 el.style.display = "none";
-            }
-         });
+            el.style.display = value ? "" : "none";
+        });
+    }
+    
 
         
-    }
+    
 
     
     
     #collectInterpolatedElements() {
-
         // Collect all elements containing interpolation expressions
         const elements = this.#appElement.querySelectorAll('*');
+    
         elements.forEach(el => {
             if (el.childNodes.length) {
                 el.childNodes.forEach(node => {
-                    if (node.nodeType === Node.TEXT_NODE) 
-                    {
-                        var expressions = this.#getInterpolations(node.textContent);
-                        if (expressions.length>0){
-                            this.#interpolatedElements.push({ element: el, node, originalText: node.textContent, expressions });
+                    if (node.nodeType === Node.TEXT_NODE) {
+                        const expressions = this.#getInterpolations(node.textContent);
+                        
+                        if (expressions.length > 0) {
+                            // Check if the element is already in the list
+                            const isDuplicate = this.#interpolatedElements.some(item => 
+                                item.element === el && item.node === node
+                            );
+    
+                            if (!isDuplicate) {
+                                this.#interpolatedElements.push({
+                                    element: el,
+                                    node,
+                                    originalText: node.textContent,
+                                    expressions
+                                });
+                            }
                         }
                     }
                 });
             }
         });
     }
+    
 
-    #addInterpolatedElement(el) 
-    {
-
-            if (el.childNodes.length) {
-                el.childNodes.forEach(node => {
-                    if (node.nodeType === Node.TEXT_NODE) 
-                    {
-                        var expressions = this.#getInterpolations(node.textContent);
-                        if (expressions.length>0){
-                            this.#interpolatedElements.push({ element: el, node, originalText: node.textContent, expressions });
-                        }
-                    }
-                });
-            }
-    }
 
     #interpolateDOM() {
 
@@ -297,31 +337,6 @@ class KicApp {
         return target;
     }
 
-
-    #flattenAppData(obj, parentKey = '') {
-        let result = {};
-        for (const key in obj) {
-            if (obj.hasOwnProperty(key)) {
-                const newKey = parentKey ? `${parentKey}.${key}` : key;
-                if (typeof obj[key] === 'object' && obj[key] !== null) {
-                    if (Array.isArray(obj[key])) {
-                        result[newKey] = obj[key]; 
-                        obj[key].forEach((item, index) => {
-                            result[`${newKey}[${index}]`] = item; 
-                            Object.assign(result, this.#flattenAppData(item, `${newKey}[${index}]`));
-                        });
-                    } else {
-                        result[newKey] = obj[key]; 
-                        Object.assign(result, this.#flattenAppData(obj[key], newKey));
-                    }
-                } else {
-                    result[newKey] = obj[key];  
-                }
-            }
-        }
-    
-        return result;
-    }
 
     #cleanWhitespace(html) 
     {
@@ -361,18 +376,53 @@ class KicApp {
                     expression = expression.replace(regex, '');
                 }
     
+                //console.log("Context Keys:", Object.keys(context));
+                //console.log("Context Values:", Object.values(context));
+                //console.log("Expression:", expression);
+
+                const functionBody = `return ${expression}`;
+                //console.log("Generated Function Body:", functionBody);
+
                 // Use the Function constructor to evaluate the expression dynamically
-                let result = new Function(...Object.keys(context), `return ${expression}`)(...Object.values(context));
+                let result = new Function(...Object.keys(context), functionBody)(...Object.values(context));
+
+                //console.log("Result:", result);
     
                 // If the result is an object, convert it to JSON string for better display
                 return typeof result === "object" ? JSON.stringify(result) : result;
 
             } catch (error) {
                 expression='kic.'+expression;
-                console.warn(`Error evaluating: {{${expression}}}`, error);
+                //console.warn(`Error evaluating: {{${expression}}}`, error);
                 return `{{${expression}}}`; // Keep the original interpolation if an error occurs
             }
         });
+    }
+
+    //Generates a flat object from any object
+    #getObjectDictionary(obj, parentKey = '') {
+        let result = {};
+        for (const key in obj) {
+            if (obj.hasOwnProperty(key)) {
+                const newKey = parentKey ? `${parentKey}.${key}` : key;
+                if (typeof obj[key] === 'object' && obj[key] !== null) {
+                    if (Array.isArray(obj[key])) {
+                        result[newKey] = obj[key]; 
+                        obj[key].forEach((item, index) => {
+                            result[`${newKey}[${index}]`] = item; 
+                            Object.assign(result, this.#getObjectDictionary(item, `${newKey}[${index}]`));
+                        });
+                    } else {
+                        result[newKey] = obj[key]; 
+                        Object.assign(result, this.#getObjectDictionary(obj[key], newKey));
+                    }
+                } else {
+                    result[newKey] = obj[key];  
+                }
+            }
+        }
+    
+        return result;
     }
     
     

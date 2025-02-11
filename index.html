@@ -37,6 +37,7 @@
                         <td>No</td>
                         <td>Brand</td>
                         <td>Serial</td>
+                        <td>Action</td>
                     </tr>
                 </thead>
                 <tbody>
@@ -44,6 +45,7 @@
                         <td></td>
                         <td>{{car.brand}}</td>
                         <td>{{car.serial}}</td>
+                        <td><button onclick="handleDeleteCar()">Delete</button></td>
                     </tr>
                 </tbody>
             </table>
@@ -56,12 +58,14 @@
                     <tr>
                         <td>Brand</td>
                         <td>Serial</td>
+                        <td>Action</td>
                     </tr>
                 </thead>
                 <tbody>
                     <tr kic-foreach="car in kic.model.cars">
                         <td><input type="text" kic-bind="car.brand"></td>
                         <td><input type="text" kic-bind="car.serial"></td>
+                        <td><button onclick="handleDeleteCar()">Delete</button></td>
                     </tr>
                 </tbody>
             </table>
@@ -83,8 +87,8 @@
     <script>
         var dataset = { test:{name:"Andersson"}, settings:{ edit:true }, model:{ name: "Johnny", cars:[{brand:"Volvo", serial:"v1234"}, {brand:"Ford", serial:"f2345"}]}};
         var appElement = document.getElementById("app");
-        var kicapp = getKICApp(appElement);
-        kicapp.mount(dataset);
+        var kicapp = getKICApp(dataset);
+        kicapp.mount(appElement);
 
         function handleShowHide()
         {
@@ -95,6 +99,13 @@
         }
 
         function handleAddCar()
+        {
+            var car = {brand:"Audi", serial:"v8888"};
+            var t = kicapp.getData();
+            t.model.cars.push(car);
+        }
+
+        function handleDeleteCar()
         {
             var car = {brand:"Audi", serial:"v8888"};
             var t = kicapp.getData();
