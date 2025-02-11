@@ -11,6 +11,7 @@ class KicApp {
     #interpolatedElements = []; 
     #foreachTemplates = []; 
     #inputBindings = []; 
+    #eventHandlers = {};
 
     constructor(data) {
         this.#appData = data;
@@ -31,11 +32,20 @@ class KicApp {
         this.#refreshDOMFromData(this.#appDataProxy, 'kic');
         this.#collectInterpolatedElements(); // Collect all interpolated elements on load
         this.#interpolateDOM();  // Initial interpolation on page load
+        this.#bindClickEvents();
     }
 
     getData()
     {
         return this.#appDataProxy;
+    }
+
+    addHandler(functionName, handlerFunction) {
+        if (typeof handlerFunction === "function") {
+            this.#eventHandlers[functionName] = handlerFunction;
+        } else {
+            console.warn(`Handler for "${functionName}" is not a function.`);
+        }
     }
 
   
@@ -202,14 +212,35 @@ class KicApp {
                 let exprlist = this.#getInterpolations(template.templateHTML);
                 if (exprlist.length>0)
                 {
-                    let regex = new RegExp(itemName, "g");
-                    newtag.innerHTML = template.templateHTML.replace(regex, arrayName+`[${counter}]`);
+                    /*
+
+                        Regex Breakdown
+                        {{([^}]*) → Captures everything before itemName inside {{ ... }}
+
+                        \\b${itemName}\\b → Finds itemName as a whole word
+
+                        ([^}]*)}} → Captures everything after itemName inside {{ ... }}
+
+                        Final Match: {{ before itemName after }}
+                        
+                        Replace Logic
+                        Keeps before and after unchanged
+                        Replaces itemName with arrayName[index]
+
+                    */
+                    let regex = new RegExp(`{{([^}]*)\\b${itemName}\\b([^}]*)}}`, "g");
+                    newtag.innerHTML = template.templateHTML.replace(regex, (match, before, after) => {
+                        return `{{${before}${arrayName}[${counter}]${after}}}`;
+                    });
+                    
                     updateInterpolations=true;
                 }
                 else{
                      newtag.innerHTML = template.templateHTML;
                 }
 
+                newtag.dataset.kicPath = `${arrayName}[${counter}]`;
+                newtag.dataset.kicIndex = counter;
                 template.parentElement.appendChild(newtag);
                 counter++;
             });
@@ -219,6 +250,53 @@ class KicApp {
         if (updateInterpolations)
             this.#collectInterpolatedElements();
     }
+
+    
+
+    #bindClickEvents() {
+        this.#appElement.querySelectorAll("[kic-click]").forEach(el => {
+            const expression = el.getAttribute("kic-click").trim();
+
+            
+            // Check if the event is already bound
+            if (el.dataset.kicClickBound) return; 
+
+            let match = expression.match(/^(\w+)\((.*?)\)$/);
+            if (match) {
+                let functionName = match[1];  // Function name (e.g., handleDeleteCar)
+                let argExpression = match[2]; // Arguments inside parentheses (e.g., car)
+
+                el.addEventListener("click", (event) => {
+                    // Resolve arguments dynamically
+                    let arglist = argExpression.split(",").map(arg => arg.trim()); // Split multiple arguments
+                    let args = arglist.map(arg => {
+                        if (arg === "event") 
+                            return event; // Allow `event` as a parameter
+
+                        return ""; // Resolve object references
+                    });
+                    
+                    // Call the function from the handlers object
+                    if (this.#eventHandlers[functionName]) {
+                        this.#eventHandlers[functionName].apply(this.#appDataProxy, args);
+                    } else {
+                        console.warn(`Handler function '${functionName}' not found.`);
+                    }
+                });
+
+                 // Mark the element as bound
+                 el.dataset.kicClickBound = "true";  
+
+            } else {
+                console.warn(`Invalid kic-click expression: ${expression}`);
+            }
+        
+    
+           
+        });
+    }
+    
+    
 
     
     
@@ -322,18 +400,17 @@ class KicApp {
 
     }
 
-    #getValueByPath(path)
-    {
-        const keys = path.split('.');
+    #getValueByPath(path) {
+        // Match "cars[0]" or "cars[1].brand"
+        const keys = path.match(/[^.[\]]+/g);
         let target = this.#appDataProxy;
+    
         keys.forEach(key => {
-            if (key.toLowerCase()!=='kic')
-            {
-                if (target)
-                    target = target[key];
+            if (key.toLowerCase() !== 'kic') {
+                if (target) target = target[key];
             }
         });
-
+    
         return target;
     }
 
