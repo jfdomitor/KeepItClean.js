@@ -42,6 +42,7 @@ class KicApp {
             {
                 this.#bindForEach(); // Rerun the binding to re-render elements
                 this.#bindClickEvents();
+                this.#bindInputs();
             }
 
             this.#interpolateDOM();  // Update interpolation after data change
@@ -51,10 +52,11 @@ class KicApp {
         {
             this.#appDataProxy.kicId = ++this.#kicId;  // Assign a new unique ID
         }
-        this.#collectInputBindings();
-        this.#bindInputs();
+       
         this.#collectForEachTemplates(); 
         this.#bindForEach();
+        this.#collectInputBindings();
+        this.#bindInputs();
         this.#refreshDOMFromData(this.#appDataProxy, 'kic');
         this.#collectInterpolatedElements(); // Collect all interpolated elements on load
         this.#interpolateDOM();  // Initial interpolation on page load
@@ -97,7 +99,16 @@ class KicApp {
                             }
                         }
                     }
+
+                    // // Make sure new elements are reactive
+                    // for (let i = 0; i < value.length; i++) {
+                    //     if (typeof value[i] === 'object' && value[i] !== null && !value[i].__isProxy) {
+                    //         value[i] = this.#createReactiveProxy(callback, value[i], newPath);
+                    //     }
+                    // }
+
                     return this.#createArrayProxy(callback, value,newPath);
+
                 }
                 if (typeof value === 'object' && value !== null) {
                     return this.#createReactiveProxy(callback, value, newPath); // Recursively create a proxy
@@ -135,6 +146,8 @@ class KicApp {
                                 }
                             }
                         }
+
+                      
 
                         callback(path, target); // Trigger DOM update on array changes
                         return result;
@@ -189,18 +202,18 @@ class KicApp {
 
             item.element.addEventListener("input", (event) => {
 
-                const keys = item.path.split('.');
+                const keys = item.path.match(/[^.[\]]+/g); // Extracts both object keys and array indices
                 let valuekey = null;
-                let target=null;
-                keys.forEach(key => {
+                let target = this.#appDataProxy;
+
+                keys.forEach((key, index) => {
                     if (key.toLowerCase()!=='kic')
                     {
-                        if (typeof this.#appDataProxy[key] === 'object') 
-                            target = this.#appDataProxy[key];
-
-                            valuekey=key;
-                    }
+                        if (typeof target[key] === 'object') 
+                            target = target[key];
     
+                        valuekey=key;
+                    }
                 });
     
                 if (!valuekey)
@@ -261,6 +274,7 @@ class KicApp {
     #bindForEach() {
 
         let updateInterpolations = false;
+        let updateInputBindings = false;
         let arraynames = [];
         this.#foreachTemplates.forEach(template => {
 
@@ -302,6 +316,7 @@ class KicApp {
                      newtag.innerHTML = template.templateHTML;
                 }
 
+                newtag.setAttribute("kic-varname", itemName);
                 newtag.setAttribute("kic-path", `${arrayName}[${counter}]`);
                 newtag.setAttribute("kic-index", counter);
                 newtag.dataset.kicIndex = counter;
@@ -311,9 +326,24 @@ class KicApp {
                 //Add references to click andlers
                 newtag.querySelectorAll("[kic-click]").forEach(el => 
                 {
+                    el.setAttribute("kic-varname", itemName);
                     el.setAttribute("kic-path", `${arrayName}[${counter}]`);
                     el.setAttribute("kic-index", counter);
                 });
+
+                 //Add references to input bindings
+                 newtag.querySelectorAll("[kic-bind]").forEach(el => 
+                {
+                        updateInputBindings=true;
+                        el.setAttribute("kic-varname", itemName);
+                        el.setAttribute("kic-path", `${arrayName}[${counter}]`);
+                        el.setAttribute("kic-index", counter);
+                        let attrib = el.getAttribute("kic-bind");
+                        if (!attrib.includes(itemName))
+                            console.warn(`Error The input binding ${attrib} used in an element under kic-foreach does not match the kic-foreach expression, should include '${itemName}'`);
+
+                        el.setAttribute("kic-bind", attrib.replace(itemName,`${arrayName}[${counter}]`));
+                    });
 
                 counter++;
 
@@ -321,6 +351,15 @@ class KicApp {
             });
            
         });
+
+        if (updateInputBindings)
+        {
+                arraynames.forEach(name=>{
+                    this.#inputBindings = this.#inputBindings.filter(p=> !p.path.includes(name));
+                });
+             
+                this.#collectInputBindings();
+        }
 
         if (updateInterpolations)
         {
@@ -354,9 +393,16 @@ class KicApp {
                         if (arg === "event") 
                             return event; // Allow `event` as a parameter
 
-                        const path = event.target.getAttribute("kic-path"); // "cars"
+                        const path = event.target.getAttribute("kic-path"); 
                         if (path)
+                        {
+                            const varname = event.target.getAttribute("kic-varname"); 
+                            if (arg!=varname)
+                            {
+                                  console.warn(`Error The variable ${arg} used in ${functionName} does not match the kic-foreach expression, should be '${varname}'`);
+                            }
                             return this.#getValueByPath(path);
+                        }
                         else
                            return this.#getValueByPath(arg);
 
@@ -446,12 +492,12 @@ class KicApp {
                         
                         if (expressions.length > 0) {
                             // Check if the element is already in the list
-                            console.log("Checking element:", el, "node:", node);
-                            console.log("Current list:", this.#interpolatedElements);
+                            // console.log("Checking element:", el, "node:", node);
+                            // console.log("Current list:", this.#interpolatedElements);
                             const isDuplicate = this.#interpolatedElements.some(item => 
                                 item.element === el && item.node === node
                             );
-                            console.log("Is duplicate?", isDuplicate);
+                            // console.log("Is duplicate?", isDuplicate);
 
                             //Check if this interpolation was created after the mount of kic
                             let foreachpath = el.getAttribute('kic-path');
