@@ -24,9 +24,28 @@ class KicApp {
     {
       
         this.#appElement = element;
-        this.#appDataProxy = this.#createReactiveProxy((path, value) => { 
-            this.#updateDOMOnChange(path, value);  // Update DOM elements like inputs
+        this.#appDataProxy = this.#createReactiveProxy((path, value) => 
+        { 
+            //Handles changes in the data and updates the dom
+
+            // Update DOM elements like inputs
+            this.#updateDOMOnChange(path, value);  
+
+             // Detect if this update affects a kic-foreach template
+             let render_foreach = false;
+            this.#foreachTemplates.forEach(template => {
+                if (template.expression.includes(path)) {
+                    render_foreach=true;
+                }
+            });
+            if (render_foreach)
+            {
+                this.#bindForEach(); // Rerun the binding to re-render elements
+                this.#bindClickEvents();
+            }
+
             this.#interpolateDOM();  // Update interpolation after data change
+
         }, this.#appData);
         if (this.#enableKicId && ! this.#appDataProxy.hasOwnProperty('kicId')) 
         {
@@ -242,6 +261,7 @@ class KicApp {
     #bindForEach() {
 
         let updateInterpolations = false;
+        let arraynames = [];
         this.#foreachTemplates.forEach(template => {
 
 
@@ -276,6 +296,7 @@ class KicApp {
                     });
                     
                     updateInterpolations=true;
+                    arraynames.push(arrayName);
                 }
                 else{
                      newtag.innerHTML = template.templateHTML;
@@ -302,7 +323,13 @@ class KicApp {
         });
 
         if (updateInterpolations)
+        {
+            arraynames.forEach(name=>{
+                this.#interpolatedElements = this.#interpolatedElements.filter(p=> !p.path.includes(name));
+            });
+         
             this.#collectInterpolatedElements();
+        }
     }
 
     
@@ -391,14 +418,7 @@ class KicApp {
             }
         });
     
-        // Detect if this update affects a kic-foreach template
-        this.#foreachTemplates.forEach(template => {
-            if (template.expression.includes(path)) {
-                this.#bindForEach(); // Rerun the binding to re-render elements
-                this.#bindClickEvents();
-            }
-        });
-    
+       
         this.#appElement.querySelectorAll(`[kic-hide="${path}"]`).forEach(el => {
             el.style.display = value ? "none" : "";
         });
@@ -426,16 +446,35 @@ class KicApp {
                         
                         if (expressions.length > 0) {
                             // Check if the element is already in the list
+                            console.log("Checking element:", el, "node:", node);
+                            console.log("Current list:", this.#interpolatedElements);
                             const isDuplicate = this.#interpolatedElements.some(item => 
                                 item.element === el && item.node === node
                             );
+                            console.log("Is duplicate?", isDuplicate);
+
+                            //Check if this interpolation was created after the mount of kic
+                            let foreachpath = el.getAttribute('kic-path');
+                            let p = el.parentElement;
+                            let safecnt=0;
+                            while (!foreachpath && p)
+                            {
+                                safecnt++;
+                                foreachpath = p.getAttribute('kic-path');
+                                p=p.parentElement;
+                                if (safecnt>10)
+                                    break;
+                            }
+                            if (!foreachpath)
+                                foreachpath="";
     
                             if (!isDuplicate) {
                                 this.#interpolatedElements.push({
                                     element: el,
                                     node,
                                     originalText: node.textContent,
-                                    expressions
+                                    expressions,
+                                    path: foreachpath
                                 });
                             }
                         }
@@ -452,8 +491,8 @@ class KicApp {
        if (this.#interpolatedElements.length===0)
             return;
 
-       this.#interpolatedElements.forEach(({ element, node, originalText, expressions }) => {
-            const nodetext = this.#updateInterpolations(originalText, this.#appDataProxy);
+       this.#interpolatedElements.forEach(({ element, node, originalText, expressions, path }) => {
+            const nodetext = this.#updateInterpolations(element, originalText, this.#appDataProxy);
             node.textContent = nodetext;
 
        });
@@ -461,16 +500,13 @@ class KicApp {
     }
 
     #getValueByPath(path) {
-        // Match "cars[0]" or "cars[1].brand"
         const keys = path.match(/[^.[\]]+/g);
         let target = this.#appDataProxy;
-    
         keys.forEach(key => {
             if (key.toLowerCase() !== 'kic') {
                 if (target) target = target[key];
             }
         });
-    
         return target;
     }
 
@@ -494,7 +530,7 @@ class KicApp {
         return matches;
     }
 
-    #updateInterpolations(str, context = {}) {
+    #updateInterpolations(element, str, context = {}) {
         return str.replace(/{{(.*?)}}/g, (_, expression) => {
             try 
             {
@@ -507,10 +543,26 @@ class KicApp {
                     return JSON.stringify(context);
                 }
 
-                if (expression.toLowerCase().includes('kic.'))
+                if (expression.toLowerCase()=='index' && element) 
                 {
-                    let regex = new RegExp('kic.', "g");
-                    expression = expression.replace(regex, '');
+                    let idx = element.getAttribute('kic-index');
+                    let p = element.parentElement;
+                    let safecnt=0;
+                    while (!idx && p)
+                    {
+                        safecnt++;
+                        idx = p.getAttribute('kic-index');
+                        p=p.parentElement;
+                        if (safecnt>100)
+                            break;
+                    }
+                    if (idx)
+                        return idx;
+                }
+
+                if (expression.toLowerCase().startsWith('kic.'))
+                {
+                    expression = expression.replace('kic.', '');
                 }
     
                 //console.log("Context Keys:", Object.keys(context));

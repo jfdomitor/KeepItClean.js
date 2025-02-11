@@ -35,7 +35,8 @@
             <table>
                 <thead>
                     <tr>
-                        <td>No</td>
+                        <td>Internal ID</td>
+                        <td>Index</td>
                         <td>Brand</td>
                         <td>Serial</td>
                         <td>Action</td>
@@ -43,7 +44,8 @@
                 </thead>
                 <tbody>
                     <tr kic-foreach="car in kic.model.cars">
-                        <td></td>
+                        <td>{{car.kicId}}</td>
+                        <td>{{index}}</td>
                         <td>{{car.brand}}</td>
                         <td>{{car.serial}}</td>
                         <td><button kic-click="handleDeleteCar(event, car)">Delete</button></td>
@@ -66,7 +68,7 @@
                     <tr kic-foreach="car in kic.model.cars">
                         <td><input type="text" kic-bind="car.brand"></td>
                         <td><input type="text" kic-bind="car.serial"></td>
-                        <td><button kic-click="handleDeleteCar(car)">Delete</button></td>
+                        <td><button kic-click="handleDeleteCar(event, x)">Delete</button></td>
                     </tr>
                 </tbody>
             </table>
