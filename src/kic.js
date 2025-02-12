@@ -28,8 +28,7 @@ class KicApp {
         { 
             //Handles changes in the data and updates the dom
 
-            // Update DOM elements like inputs
-            this.#updateDOMOnChange(path, value);  
+          
 
              // Detect if this update affects a kic-foreach template
              let render_foreach = false;
@@ -41,9 +40,12 @@ class KicApp {
             if (render_foreach)
             {
                 this.#bindForEach(); // Rerun the binding to re-render elements
-                this.#bindClickEvents();
                 this.#bindInputs();
+                this.#bindClickEvents();
             }
+
+            // Update DOM elements like inputs
+            this.#updateDOMOnChange(path, value);  
 
             this.#interpolateDOM();  // Update interpolation after data change
 
@@ -76,100 +78,68 @@ class KicApp {
         }
     }
 
-  
     #createReactiveProxy(callback, data, currentPath = "kic") {
         const handler = {
             get: (target, key) => {
                 const value = target[key];
                 const newPath = Array.isArray(target) ? `${currentPath}[${key}]` : `${currentPath}.${key}`;
-
-                 // Only add kicId if the feature is enabled and it's an object
-                 if (this.#enableKicId && typeof value === 'object' && value !== null && !value.hasOwnProperty('kicId')) 
-                {
-                    value.kicId = ++this.#kicId;  // Assign a new unique ID
+    
+                // Assign kicId if enabled and the value is an object without kicId
+                if (this.#enableKicId && typeof value === 'object' && value !== null && !value.hasOwnProperty('kicId')) {
+                    value.kicId = ++this.#kicId;
                 }
-
-                // If it's an object or array, make it reactive too
+    
+                // Ensure arrays and objects inside them are reactive
                 if (Array.isArray(value)) {
-                    if (this.#enableKicId) {
-                        // Check and add kicId to all objects in the array after modification
-                        for (let obj of value) {
-                            if (typeof obj === 'object' && obj !== null && !obj.hasOwnProperty('kicId')) {
-                                obj.kicId = ++this.#kicId;
-                            }
-                        }
-                    }
-
-                    // // Make sure new elements are reactive
-                    // for (let i = 0; i < value.length; i++) {
-                    //     if (typeof value[i] === 'object' && value[i] !== null && !value[i].__isProxy) {
-                    //         value[i] = this.#createReactiveProxy(callback, value[i], newPath);
-                    //     }
-                    // }
-
-                    return this.#createArrayProxy(callback, value,newPath);
-
+                    return new Proxy(value, handler); // Array itself is proxied
                 }
                 if (typeof value === 'object' && value !== null) {
-                    return this.#createReactiveProxy(callback, value, newPath); // Recursively create a proxy
+                    return this.#createReactiveProxy(callback, value, newPath); // Recursively proxy objects
                 }
+    
                 return value;
             },
             set: (target, key, value) => {
-                if (this.#enableKicId && typeof value === 'object' && value !== null && !value.hasOwnProperty('kicId')) 
-                {
-                    value.kicId = ++this.#kicId;  // Assign kicId to any new objects
+                const fullPath = Array.isArray(target) ? `${currentPath}[${key}]` : `${currentPath}.${key}`;
+    
+                // Wrap objects in a proxy before assigning
+                if (typeof value === 'object' && value !== null) {
+                    if (this.#enableKicId && !value.hasOwnProperty('kicId')) {
+                        value.kicId = ++this.#kicId; // Assign kicId if needed
+                    }
+                    value = this.#createReactiveProxy(callback, value, fullPath); // Make reactive
                 }
-
+    
                 target[key] = value;
-                const path = Array.isArray(target) ? `${currentPath}[${key}]` : `${currentPath}.${key}`;
-                callback(path, value);
+                callback(fullPath, value); // Notify callback
                 return true;
             }
         };
-        
-        return new Proxy(data, handler);
-    }
     
-    #createArrayProxy(callback, array, path = "") {
-        const arrayHandler = {
+        return new Proxy(data, {
             get: (target, key) => {
                 if (['push', 'pop', 'splice', 'shift', 'unshift'].includes(key)) {
                     return (...args) => {
                         const result = Array.prototype[key].apply(target, args);
-
-                        if (this.#enableKicId) {
-                            // Check and add kicId to all objects in the array after modification
-                            for (let obj of target) {
-                                if (typeof obj === 'object' && obj !== null && !obj.hasOwnProperty('kicId')) {
-                                    obj.kicId = ++this.#kicId;
-                                }
+    
+                        // Ensure objects inside the array remain reactive
+                        for (let i = 0; i < target.length; i++) {
+                            if (typeof target[i] === 'object' && target[i] !== null && !target[i].__isProxy) {
+                                target[i] = this.#createReactiveProxy(callback, target[i], `${currentPath}[${i}]`);
                             }
                         }
-
-                      
-
-                        callback(path, target); // Trigger DOM update on array changes
+    
+                        callback(currentPath, target); // Notify change for array mutations
                         return result;
                     };
                 }
-                return target[key];
+                return handler.get(target, key);
             },
-            set: (target, key, value) => {
-
-                if (this.#enableKicId && typeof value === 'object' && value !== null && !value.hasOwnProperty('kicId')) 
-                {
-                    value.kicId = ++this.#kicId;   // Assign kicId
-                }
-
-                target[key] = value;
-                callback(path, target); // Update DOM when an index is modified
-                return true;
-            }
-        };
-        
-        return new Proxy(array, arrayHandler);
+            set: handler.set
+        });
     }
+    
+   
     
 
 
@@ -433,35 +403,39 @@ class KicApp {
     
     
 
-    #refreshDOMFromData(obj, path)
-    {
+    #refreshDOMFromData(obj, path) {
         Object.keys(obj).forEach(key => {
-          
             let tempobj = obj[key];
-            if (tempobj !== undefined && tempobj !== null){
-                if (typeof tempobj !== 'object')
-                {
-                    this.#updateDOMOnChange(path+'.'+key, tempobj);
-                }
-                else
-                {
-                    this.#refreshDOMFromData(tempobj, path+'.'+key);
+    
+            if (tempobj !== undefined && tempobj !== null) {
+                // Detect numeric keys (array indices) and format path correctly
+                const newPath = Array.isArray(obj) && /^\d+$/.test(key) 
+                    ? `${path}[${key}]` 
+                    : `${path}.${key}`;
+    
+                if (typeof tempobj !== 'object') {
+                    this.#updateDOMOnChange(newPath, tempobj);
+                } else {
+                    this.#refreshDOMFromData(tempobj, newPath);
                 }
             }
         });
     }
+    
 
     #updateDOMOnChange(path, value) {
-        this.#appElement.querySelectorAll(`[kic-bind="${path}"]`).forEach(el => {
-            if (Array.isArray(value)) {
-                el.innerHTML = value.map(item => `<li>${item}</li>`).join('');
-            } else if (el.type === "checkbox") {
-                el.checked = value;
-            } else if (el.type === "radio") {
-                el.checked = el.value === value;
-            } else {
-                el.value = value;
-            }
+        this.#appElement.querySelectorAll(`[kic-bind="${path}"]`).forEach(el => 
+        {
+            if (!Array.isArray(value) && ! (typeof value === 'object')) {
+                if (el.type === "checkbox") {
+                    el.checked = value;
+                } else if (el.type === "radio") {
+                    el.checked = el.value === value;
+                } else {
+                    el.value = value;
+                }
+            } 
+            
         });
     
        
