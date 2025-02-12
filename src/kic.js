@@ -27,7 +27,7 @@ class KicApp {
         this.#appDataProxy = this.#createReactiveProxy((path, value) => 
         { 
             //Handles changes in the data and updates the dom
-
+            console.log(path);
           
 
              // Detect if this update affects a kic-foreach template
@@ -45,7 +45,8 @@ class KicApp {
             }
 
             // Update DOM elements like inputs
-            this.#updateDOMOnChange(path, value);  
+            this.#refreshDOMFromData(value, path);
+            //this.#updateDOMOnChange(path, value);  
 
             this.#interpolateDOM();  // Update interpolation after data change
 
@@ -83,60 +84,95 @@ class KicApp {
             get: (target, key) => {
                 const value = target[key];
                 const newPath = Array.isArray(target) ? `${currentPath}[${key}]` : `${currentPath}.${key}`;
-    
-                // Assign kicId if enabled and the value is an object without kicId
-                if (this.#enableKicId && typeof value === 'object' && value !== null && !value.hasOwnProperty('kicId')) {
-                    value.kicId = ++this.#kicId;
+
+  
+                if (this.#enableKicId && typeof value === 'object' && value !== null && !value.hasOwnProperty('kicId')) 
+                {
+                    value.kicId = ++this.#kicId;  
                 }
-    
-                // Ensure arrays and objects inside them are reactive
-                if (Array.isArray(value)) {
-                    return new Proxy(value, handler); // Array itself is proxied
+
+   
+                if (Array.isArray(value)) 
+                {
+                    if (this.#enableKicId) {
+                        for (let obj of value) {
+                            if (typeof obj === 'object' && obj !== null && !obj.hasOwnProperty('kicId')) {
+                                obj.kicId = ++this.#kicId;
+                            }
+                        }
+                    }
+
+                    return this.#createArrayProxy(callback, value,newPath);
+
                 }
                 if (typeof value === 'object' && value !== null) {
-                    return this.#createReactiveProxy(callback, value, newPath); // Recursively proxy objects
+                    return this.#createReactiveProxy(callback, value, newPath); // Recursively create a proxy
                 }
-    
                 return value;
             },
             set: (target, key, value) => {
-                const fullPath = Array.isArray(target) ? `${currentPath}[${key}]` : `${currentPath}.${key}`;
-    
+
                 // Wrap objects in a proxy before assigning
                 if (typeof value === 'object' && value !== null) {
                     if (this.#enableKicId && !value.hasOwnProperty('kicId')) {
                         value.kicId = ++this.#kicId; // Assign kicId if needed
                     }
-                    value = this.#createReactiveProxy(callback, value, fullPath); // Make reactive
+                    //Unclear if needed
+                    value = this.#createReactiveProxy(callback, value, path); // Make reactive
                 }
-    
+
                 target[key] = value;
-                callback(fullPath, value); // Notify callback
+                const path = Array.isArray(target) ? `${currentPath}[${key}]` : `${currentPath}.${key}`;
+                callback(path, value);
                 return true;
             }
         };
+        
+        return new Proxy(data, handler);
+    }
     
-        return new Proxy(data, {
+    #createArrayProxy(callback, array, path = "") {
+        const arrayHandler = {
             get: (target, key) => {
                 if (['push', 'pop', 'splice', 'shift', 'unshift'].includes(key)) {
                     return (...args) => {
                         const result = Array.prototype[key].apply(target, args);
-    
-                        // Ensure objects inside the array remain reactive
+
                         for (let i = 0; i < target.length; i++) {
-                            if (typeof target[i] === 'object' && target[i] !== null && !target[i].__isProxy) {
-                                target[i] = this.#createReactiveProxy(callback, target[i], `${currentPath}[${i}]`);
+                            if (typeof target[i] === 'object' && target[i] !== null && !target[i].__isProxy) 
+                            {
+                                if (this.#enableKicId) 
+                                {
+                                    target[i].kicId = ++this.#kicId;
+                                }
+                                target[i] = this.#createReactiveProxy(callback, target[i], `${path}[${i}]`);
                             }
                         }
-    
-                        callback(currentPath, target); // Notify change for array mutations
+                        
+                        callback(path, target); // Trigger DOM update on array changes
                         return result;
                     };
                 }
-                return handler.get(target, key);
+                
+                return target[key];
             },
-            set: handler.set
-        });
+            set: (target, key, value) => {
+
+                if (typeof value === 'object' && value !== null) {
+                    if (!value.hasOwnProperty('kicId')) {
+                        value.kicId = ++this.#kicId;
+                    }
+                    //Unclear if needed
+                    //value = this.#createReactiveProxy(callback, value, `${path}[${key}]`);
+                }
+
+                target[key] = value;
+                callback(path, target); // Update DOM when an index is modified
+                return true;
+            }
+        };
+        
+        return new Proxy(array, arrayHandler);
     }
     
    
