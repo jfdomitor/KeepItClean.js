@@ -130,7 +130,7 @@ class KicApp {
                         value.kicId = ++this.#kicId; // Assign kicId if needed
                     }
                     //Unclear if needed
-                    //value = this.#createReactiveProxy(callback, value, path); // Make reactive
+                    value = this.#createReactiveProxy(callback, value, path); // Make reactive
                 }
 
                 target[key] = value;
@@ -144,29 +144,36 @@ class KicApp {
     }
     
     #createArrayProxy(callback, array, path = "") {
+       
+        // Prevent infinite loop by pre-wrapping existing objects before creating the proxy
+        // const wrappedArray = array.map((item, index) => {
+        //     if (typeof item === 'object' && item !== null && !item.__isProxy) {
+        //         if (this.#enableKicId && !item.hasOwnProperty('kicId')) {
+        //             item.kicId = ++this.#kicId;
+        //         }
+        //         return this.#createReactiveProxy(callback, item, `${path}[${index}]`);
+        //     }
+        //     return item;
+        // });
+
         const arrayHandler = {
             get: (target, key) => {
 
-                if (key === 'length') {
-                    return target[key];
-                }
-                if (key === 'forEach') {
-                    return target[key];
-                }
-    
+              
                 // If the value is already a proxy, return it as is
                 if (target[key] && target[key].__isProxy) {
                     return target[key];
                 }
 
-                if (['push', 'pop', 'splice', 'shift', 'unshift'].includes(key)) {
+                if (['push', 'pop', 'splice', 'shift', 'unshift'].includes(key)) 
+                {
                     return (...args) => {
                         const result = Array.prototype[key].apply(target, args);
 
                         for (let i = 0; i < target.length; i++) {
                             if (typeof target[i] === 'object' && target[i] !== null && !target[i].__isProxy) 
                             {
-                                if (this.#enableKicId) 
+                                if (this.#enableKicId && typeof target[i] === 'object' && target[i] !== null && !target[i].hasOwnProperty('kicId')) 
                                 {
                                     target[i].kicId = ++this.#kicId;
                                 }
@@ -179,11 +186,6 @@ class KicApp {
                     };
                 }
 
-                // Ensure objects in the array are reactive when accessed
-                //  if (typeof target[key] === 'object' && target[key] !== null && !target[key].__isProxy) {
-                //      target[key] = this.#createReactiveProxy(callback, target[key], `${path}[${key}]`);
-                //  }
-                
                 return target[key];
             },
             set: (target, key, value) => {
@@ -679,6 +681,11 @@ class KicApp {
                 return `{{${expression}}}`; // Keep the original interpolation if an error occurs
             }
         });
+    }
+
+    #isNonNegIntegerString(value) {
+        return typeof value === 'string' && value.trim() !== '' && 
+               !isNaN(value) && Number.isInteger(Number(value)) && Number(value) >= 0;
     }
 
     //Generates a flat object from any object
