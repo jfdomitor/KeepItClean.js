@@ -91,7 +91,7 @@
         var dataset = { settings:{ edit:true }, model:{ fname: "Johnny", lname: "Andersson", cars:[{brand:"Volvo", serial:"v1234"}, {brand:"Ford", serial:"f2345"}]}, count:0};
         var appElement = document.getElementById("app");
         var kicapp = getKICApp(dataset, true);
-
+        kicapp.enableConsoleLog(1, true);
         kicapp.addHandler("handleDeleteCar", function(event, data) 
         {
             var t = this.getData();
