@@ -49,7 +49,7 @@ class KicApp {
             }
 
             // Update DOM elements like inputs
-            this.#updateDOMOnChange(path, value);
+            this.#applyProxyChangesToDOM(path, value);
             this.#interpolateDOM();  // Update interpolation after data change
 
         }, this.#appData);
@@ -62,7 +62,7 @@ class KicApp {
         this.#bindForEach();
         this.#collectInputBindings();
         this.#bindInputs();
-        this.#updateDOMOnChange('kic', this.#appDataProxy);
+        this.#applyProxyChangesToDOM('kic', this.#appDataProxy);
         this.#collectInterpolatedElements(); // Collect all interpolated elements on load
         this.#interpolateDOM();  // Initial interpolation on page load
         this.#bindClickEvents();
@@ -94,9 +94,6 @@ class KicApp {
                 if (value && value.__isProxy) {
                     return value;
                 }
-                
-
-                //console.log(newPath);
 
                 if (typeof value === 'object' && value !== null) 
                 {
@@ -126,11 +123,15 @@ class KicApp {
                 return value;
             },
             set: (target, key, value) => {
+
+                if (target[key] === value) 
+                    return true;
+        
                 target[key] = value;
+
                 if (['length'].includes(key)) 
-                {
-                   return true;
-                }
+                    return true;
+
                 const path = Array.isArray(target) ? `${currentpath}[${key}]` : `${currentpath}.${key}`;
                 callback(path, value);
                 return true;
@@ -409,7 +410,7 @@ class KicApp {
     
     
 
-    #updateDOMOnChange(path, value) {
+    #applyProxyChangesToDOM(path, value) {
 
         if (!this.#isPrimitive(value))
         {
@@ -421,7 +422,7 @@ class KicApp {
                         ? `${path}[${key}]` 
                         : `${path}.${key}`;
         
-                    this.#updateDOMOnChange(newPath, tempobj);
+                    this.#applyProxyChangesToDOM(newPath, tempobj);
                     return;
                     
                 }
