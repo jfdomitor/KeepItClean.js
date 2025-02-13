@@ -7,6 +7,7 @@ class KicApp {
 
     #kicId=0;
     #enableKicId = false;
+    #enableInterplation = true;
     #appElement; 
     #appData; 
     #appDataProxy; 
@@ -50,7 +51,9 @@ class KicApp {
 
             // Update DOM elements like inputs
             this.#applyProxyChangesToDOM(path, value);
-            this.#interpolateDOM();  // Update interpolation after data change
+
+            if (this.#enableInterplation)
+                this.#interpolateDOM(); 
 
         }, this.#appData);
         if (this.#enableKicId && ! this.#appDataProxy.hasOwnProperty('kicId')) 
@@ -63,9 +66,13 @@ class KicApp {
         this.#collectInputBindings();
         this.#bindInputs();
         this.#applyProxyChangesToDOM('kic', this.#appDataProxy);
-        this.#collectInterpolatedElements(); // Collect all interpolated elements on load
-        this.#interpolateDOM();  // Initial interpolation on page load
         this.#bindClickEvents();
+
+        if (this.#enableInterplation)
+        {
+            this.#collectInterpolatedElements(); // Collect all interpolated elements on load
+            this.#interpolateDOM();  // Initial interpolation on page load
+        }
     }
 
     getData()
@@ -73,6 +80,11 @@ class KicApp {
         return this.#appDataProxy;
     }
 
+    enableInterpolation(value)
+    {
+        if (this.#isPrimitive(value))
+            this.#enableInterplation = value;
+    }
    
     addHandler(functionName, handlerFunction) {
         if (typeof handlerFunction === "function") {
@@ -266,7 +278,7 @@ class KicApp {
             foreachArray.forEach(item => {
                 const newtag = document.createElement(template.templateTagName);
                 let exprlist = this.#getInterpolationPaths(template.templateHTML);
-                if (exprlist.length>0)
+                if (exprlist.length>0 && this.#enableInterplation)
                 {
                     /*
 
@@ -290,11 +302,13 @@ class KicApp {
                     });
                     
                     updateInterpolations=true;
-                    arraynames.push(arrayName);
+                   
                 }
                 else{
                      newtag.innerHTML = template.templateHTML;
                 }
+
+                arraynames.push(arrayName);
 
                 newtag.setAttribute("kic-varname", itemName);
                 newtag.setAttribute("kic-path", `${arrayName}[${counter}]`);
@@ -341,12 +355,12 @@ class KicApp {
                 this.#collectInputBindings();
         }
 
-        if (updateInterpolations)
+        if (updateInterpolations && this.#enableInterplation)
         {
             arraynames.forEach(name=>{
                 this.#interpolatedElements = this.#interpolatedElements.filter(p=> !p.path.includes(name));
             });
-         
+
             this.#collectInterpolatedElements();
         }
     }

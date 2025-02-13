@@ -92,6 +92,7 @@
         var appElement = document.getElementById("app");
         var kicapp = getKICApp(dataset, true);
         kicapp.enableConsoleLog(1, true);
+        kicapp.enableInterpolation(false);
         kicapp.addHandler("handleDeleteCar", function(event, data) 
         {
             var t = this.getData();
@@ -124,7 +125,14 @@
         kicapp.mount(appElement);
 
 
-        
+        var t = kicapp.getData();
+        let temparr = [];
+        for(i=0; i<20; i++){
+            var car = {brand:"Mercedes", serial:"99999"};
+            temparr.push(car);
+        }
+
+        t.model.cars= temparr;
 
    
         
