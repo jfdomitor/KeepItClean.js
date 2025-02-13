@@ -264,7 +264,7 @@ class KicApp {
             let counter=0;
             foreachArray.forEach(item => {
                 const newtag = document.createElement(template.templateTagName);
-                let exprlist = this.#getInterpolations(template.templateHTML);
+                let exprlist = this.#getInterpolationPaths(template.templateHTML);
                 if (exprlist.length>0)
                 {
                     /*
@@ -470,7 +470,7 @@ class KicApp {
             if (el.childNodes.length) {
                 el.childNodes.forEach(node => {
                     if (node.nodeType === Node.TEXT_NODE) {
-                        const expressions = this.#getInterpolations(node.textContent);
+                        const expressions = this.#getInterpolationPaths(node.textContent);
                         
                         if (expressions.length > 0) {
                             // Check if the element is already in the list
@@ -546,7 +546,8 @@ class KicApp {
             .replace(/(\S)\s{2,}(\S)/g, '$1 $2'); // Reduce multiple spaces to one inside text nodes
     }
 
-    #getInterpolations(str) {
+    //Get interpolation data paths from a string found in the dom
+    #getInterpolationPaths(str) {
         const regex = /{{(.*?)}}/g;
         let matches = [];
         let match;
@@ -562,15 +563,14 @@ class KicApp {
         return str.replace(/{{(.*?)}}/g, (_, expression) => {
             try 
             {
-
-                // Trim the expression to remove extra spaces
                 expression = expression.trim();
     
-                // If the expression is just the variable name (e.g., `kic`), return the full context of it
+                //If it's the root
                 if (expression.toLowerCase()=='kic') {
                     return JSON.stringify(context);
                 }
 
+                //Index (Allowed as interpolation in kic-foreach)
                 if (expression.toLowerCase()=='index' && element) 
                 {
                     let idx = element.getAttribute('kic-index');
@@ -589,38 +589,25 @@ class KicApp {
                 }
 
                 if (expression.toLowerCase().startsWith('kic.'))
-                {
                     expression = expression.replace('kic.', '');
-                }
-    
-                //console.log("Context Keys:", Object.keys(context));
-                //console.log("Context Values:", Object.values(context));
-                //console.log("Expression:", expression);
+                
 
                 const functionBody = `return ${expression}`;
-                //console.log("Generated Function Body:", functionBody);
 
                 // Use the Function constructor to evaluate the expression dynamically
                 let result = new Function(...Object.keys(context), functionBody)(...Object.values(context));
 
-                //console.log("Result:", result);
-    
                 // If the result is an object, convert it to JSON string for better display
                 return typeof result === "object" ? JSON.stringify(result) : result;
 
             } catch (error) {
                 expression='kic.'+expression;
-                //console.warn(`Error evaluating: {{${expression}}}`, error);
                 return `{{${expression}}}`; // Keep the original interpolation if an error occurs
             }
         });
     }
 
-    #isNonNegIntegerString(value) {
-        return typeof value === 'string' && value.trim() !== '' && 
-               !isNaN(value) && Number.isInteger(Number(value)) && Number(value) >= 0;
-    }
-
+ 
     #isPrimitive(value)
     {
         let result = value !== null && typeof value !== "object" && typeof value !== "function";
@@ -628,7 +615,7 @@ class KicApp {
     }
 
     //Generates a flat object from any object
-    #getObjectDictionary(obj, parentKey = '') {
+    getObjectDictionary(obj, parentKey = '') {
         let result = {};
         for (const key in obj) {
             if (obj.hasOwnProperty(key)) {
@@ -638,11 +625,11 @@ class KicApp {
                         result[newKey] = obj[key]; 
                         obj[key].forEach((item, index) => {
                             result[`${newKey}[${index}]`] = item; 
-                            Object.assign(result, this.#getObjectDictionary(item, `${newKey}[${index}]`));
+                            Object.assign(result, this.getObjectDictionary(item, `${newKey}[${index}]`));
                         });
                     } else {
                         result[newKey] = obj[key]; 
-                        Object.assign(result, this.#getObjectDictionary(obj[key], newKey));
+                        Object.assign(result, this.getObjectDictionary(obj[key], newKey));
                     }
                 } else {
                     result[newKey] = obj[key];  
@@ -653,7 +640,7 @@ class KicApp {
         return result;
     }
     
-    /****  Logging  */
+    /*  Logging  */
     enableConsoleLog(id, active)
     {
         const logidx = this.#consoleLogs.findIndex(p=> p.id===id);

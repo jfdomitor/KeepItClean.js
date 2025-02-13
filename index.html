@@ -88,23 +88,17 @@
        
     <script src="./src/kic.js"></script>
     <script>
-        var dataset = { settings:{ edit:true }, model:{ fname: "Johnny", lname: "Andersson", cars:[{brand:"Volvo", serial:"v1234"}, {brand:"Ford", serial:"f2345"}]}, count:0};
+        var dataset = { settings:{ edit:true }, model:{ fname: "Johnny", lname: "Andersson", cars:[{brand:"Volvo", serial:"v1234"}, {brand:"Ford", serial:"f2345"}]}};
         var appElement = document.getElementById("app");
         var kicapp = getKICApp(dataset, true);
         kicapp.enableConsoleLog(1, true);
         kicapp.addHandler("handleDeleteCar", function(event, data) 
         {
             var t = this.getData();
-            // Find the index of the car with id 2
             const indexToRemove = t.model.cars.findIndex(car => car.kicId === data.kicId);
-
-            // If the car is found, remove it using splice
             if (indexToRemove !== -1) {
                 t.model.cars.splice(indexToRemove, 1);  // Remove the car at index found
             }
-
-            t.count++;
-            console.log("Clicked! Count:", this.count);
         });
 
         kicapp.addHandler("sayHello", function(event) 
