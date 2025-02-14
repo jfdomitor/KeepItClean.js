@@ -36,17 +36,17 @@ class KicApp {
                 console.log(log.name, path, value, key);
           
 
-            if (Array.isArray(value))
-            {
-                this.#bindForEachOnChange(path, value, key); // Rerun the binding to re-render elements
+            // if (Array.isArray(value))
+            // {
+            //     this.#bindForEachOnChange(path, value, key); // Rerun the binding to re-render elements
                 
-            }
+            // }
 
-            // Update DOM elements like inputs
-            this.#applyProxyChangesToDOM(path, value);
+            // // Update DOM elements like inputs
+            // this.#applyProxyChangesToDOM(path, value);
 
-            if (this.#enableInterpolation)
-                this.#interpolateDOM(); 
+            // if (this.#enableInterpolation)
+            //     this.#interpolateDOM(); 
 
         }, this.#appData);
 
@@ -55,10 +55,11 @@ class KicApp {
             this.#appDataProxy.kicId = ++this.#kicId;  // Assign a new unique ID
         }
        
-        this.#collectForEachTemplates(); 
-        this.#bindForEach();
-        this.#collectInputBindings();
-        this.#bindInputs();
+        this.#buildDomDictionary(this.#appElement);
+        // this.#collectForEachTemplates(); 
+        // this.#bindForEach();
+        // this.#collectInputBindings();
+        // this.#bindInputs();
         this.#applyProxyChangesToDOM('kic', this.#appDataProxy);
         this.#bindClickEvents();
 
@@ -172,64 +173,79 @@ class KicApp {
         });
     }
 
-    #bindInputs(element) {
+    #setupTemplates(path) 
+    {
 
-        let bindings = [];
-        if (!element)
-            bindings =  this.#inputBindings;
-        else{
-            bindings = this.#inputBindings.filter(p=> p.element === element);
-        }
-      
-        bindings.forEach(item => {
+    }
 
+    #setupBindings(path) 
+    {
+        if (!path)
+            throw new error('#applyDomDistionary was called without a path');
 
-            item.element.addEventListener("input", (event) => {
+        let workscope = [];
+        if (path.toLowerCase()=='kic')
+            workscope = this.#domDictionary;
+        else
+            workscope= this.#domDictionary.filter(p=> p.path.includes(path));
 
-                const keys = item.path.match(/[^.[\]]+/g); // Extracts both object keys and array indices
-                let valuekey = null;
-                let target = this.#appDataProxy;
-
-                keys.forEach((key, index) => {
-                    if (key.toLowerCase()!=='kic')
-                    {
-                        if (typeof target[key] === 'object') 
-                            target = target[key];
     
-                        valuekey=key;
+        workscope.forEach(item => 
+        {
+
+            if (item.directive==="kic-bind")
+            {
+
+                item.element.addEventListener("input", (event) => {
+
+                    const keys = item.path.match(/[^.[\]]+/g); // Extracts both object keys and array indices
+                    let valuekey = null;
+                    let target = this.#appDataProxy;
+
+                    keys.forEach((key, index) => {
+                        if (key.toLowerCase()!=='kic')
+                        {
+                            if (typeof target[key] === 'object') 
+                                target = target[key];
+        
+                            valuekey=key;
+                        }
+                    });
+        
+                    if (!valuekey)
+                        return;
+                    if (!target)
+                        return;
+
+
+                    const log = this.#getConsoleLog(3);
+                    if (item.element.type === "checkbox") 
+                    {
+                        if (log.active)
+                            console.log(log.name, "type: " + item.element.type, "key: " + valuekey, "input value: " + item.element.checked);
+                        target[valuekey] =  item.element.checked;
+                    } 
+                    else if ( item.element.type === "radio") 
+                    {
+                        if (log.active)
+                            console.log(log.name, "type: " + item.element.type, "key: " + valuekey, "input value: " + item.element.value);
+
+                        if (item.element.checked)
+                            target[valuekey] =  item.element.value;
+                    } 
+                    else 
+                    {
+                        if (log.active)
+                            console.log(log.name, "type: " + item.element.type, "key: " + valuekey, "input value: " + item.element.value);
+
+                        target[valuekey] =  item.element.value;
                     }
                 });
-    
-                if (!valuekey)
-                    return;
-                if (!target)
-                    return;
+            }
 
-
-                const log = this.#getConsoleLog(3);
-                if (item.element.type === "checkbox") 
-                {
-                    if (log.active)
-                        console.log(log.name, "type: " + item.element.type, "key: " + valuekey, "input value: " + item.element.checked);
-                    target[valuekey] =  item.element.checked;
-                } 
-                else if ( item.element.type === "radio") 
-                {
-                    if (log.active)
-                        console.log(log.name, "type: " + item.element.type, "key: " + valuekey, "input value: " + item.element.value);
-
-                    if (item.element.checked)
-                        target[valuekey] =  item.element.value;
-                } 
-                else 
-                {
-                    if (log.active)
-                        console.log(log.name, "type: " + item.element.type, "key: " + valuekey, "input value: " + item.element.value);
-
-                    target[valuekey] =  item.element.value;
-                }
-            });
         });
+    
+    
     }
 
     #collectForEachTemplates() 
@@ -279,12 +295,8 @@ class KicApp {
         if (!Array.isArray(array))
             throw new error('bindForEachOnChange was called with a value that was not an array, ' + path);
 
-        let isSinglePush = operation === "push";
+        let isSinglePush = false; //operation === "push";
         let templates =   this.#foreachTemplates.filter(p=> p.path===path);
-        let interpolationsFound = false;
-        let inputBindingsFound = false;
-        let clickHandlersFound = false;
-        let result = false;
         templates.forEach(template => {
 
           
@@ -292,7 +304,10 @@ class KicApp {
                 isSinglePush=false;
 
             if (!isSinglePush)
+            {
+                this.#removeFromDomDictionary(template.parentElement);
                 template.parentElement.innerHTML = ""; // Clear list
+            }
 
             let counter=0;
             array.forEach(item => {
@@ -303,57 +318,21 @@ class KicApp {
                 newtag.setAttribute("kic-index", counter);
                 newtag.dataset.kicIndex = counter;
                 template.parentElement.appendChild(newtag);
-                result=true;
-        
-                //Interpolations found
-                let exprlist = this.#getInterpolationPaths(newtag.innerHTML);
-                if (exprlist.length>0 && this.#enableInterpolation)
-                {
-                    /*
-                        Regex Breakdown
-                        {{([^}]*) → Captures everything before template.foreachVarName inside {{ ... }}
-                        \\b${template.foreachVarName}\\b → Finds template.foreachVarName as a whole word
-                        ([^}]*)}} → Captures everything after template.foreachVarName inside {{ ... }}
 
-                        Final Match: {{ before template.foreachVarName after }}
-                        
-                        Replace Logic
-                        Keeps before and after unchanged
-                        Replaces template.foreachVarName with arrayName[index]
-                        Example: car.serial, becomes root.array[index].serial
-                    */
-                    let regex = new RegExp(`{{([^}]*)\\b${template.foreachVarName}\\b([^}]*)}}`, "g");
-                    newtag.innerHTML = template.templateHTML.replace(regex, (match, before, after) => {
-                        return `{{${before}${arrayName}[${counter}]${after}}}`;
-                    });
-                    
-                    interpolationsFound=true;
-                }
- 
-                if (interpolationsFound)
-                {
-                    if (isSinglePush)
-                    {
-                        this.#collectInterpolatedElements(newtag);
-                        this.#interpolateDOM(newtag);  
-                    }
-                }
-              
-
+                this.#buildDomDictionary(newtag);
+               
                 //Add references to click handlers
                 newtag.querySelectorAll("[kic-click]").forEach(el => 
                 {
-                    clickHandlersFound = true;
                     el.setAttribute("kic-varname", template.foreachVarName);
                     el.setAttribute("kic-path", `${template.path}[${counter}]`);
                     el.setAttribute("kic-index", counter);
-                    this.#bindClickEvents(newtag);
+                    this.#buildDomDictionary(el);
                 });
 
                 //Add references to input bindings
                 newtag.querySelectorAll("[kic-bind]").forEach(el => 
                 {
-                    inputBindingsFound=true;
                     el.setAttribute("kic-varname", template.foreachVarName);
                     el.setAttribute("kic-path", `${template.path}[${counter}]`);
                     el.setAttribute("kic-index", counter);
@@ -363,50 +342,18 @@ class KicApp {
 
                     let bindingpath = attrib.replace(template.foreachVarName,`${template.path}[${counter}]`);
                     el.setAttribute("kic-bind", bindingpath);
-
-                    if (isSinglePush)
-                    {
-                        this.#inputBindings.push({element: el, path:bindingpath});
-                        this.#bindInputs(el);
-                    }
+                    this.#buildDomDictionary(el);
 
                 });
 
-             
-
                 counter++;
 
-                
             });
            
         });
 
 
-        if (isSinglePush)
-            return;
-        
-        if (inputBindingsFound)
-        {
-            templates.forEach(t=>{
-                this.#inputBindings = this.#inputBindings.filter(p=> !p.path.includes(t.path));
-            });
-                
-            this.#collectInputBindings();
-            this.#bindInputs();
-        }
-
-        if (interpolationsFound && this.#enableInterpolation)
-        {
-            templates.forEach(t=>{
-                this.#interpolatedElements = this.#interpolatedElements.filter(p=> !p.path.includes(t.path));
-            });
-
-            this.#collectInterpolatedElements();
-            this.#interpolateDOM();  
-
-        }
-
-        return result;
+     
         
     }
 
@@ -513,23 +460,47 @@ class KicApp {
     //     }
     // }
 
-    #buildDomDictionary()
+    #buildDomDictionary(element)
     {
+        const tag = element || this.#appElement;
+
         this.#domDictionary = [];
-        this.#appElement.querySelectorAll("[kic-*]").forEach(el => {
+        tag.querySelectorAll("[kic-*]").forEach(el => {
             const kicAttributes = el.getAttributeNames()
             .filter(attr => attr.startsWith("kic-"))
             .map(attr => ({ name: attr, value: el.getAttribute(attr) }));
 
             kicAttributes.forEach(attr =>
             {
-                if (['kic-bind', 'kic-hide', 'kic-show', 'kic-foreach'].includes(attr.name))
-                    this.#domDictionary.push({element: el, path:attr.value, isDataRef: true});
+                if (['kic-foreach'].includes(attr.name))
+                    this.#domDictionary.push({element: el, directive: attr.name,  path:attr.value, kictype: "template"});
+
+                if (['kic-bind', 'kic-hide', 'kic-show'].includes(attr.name))
+                    this.#domDictionary.push({element: el, directive: attr.name, path:attr.value, kictype: "pathbinding"});
+
                 if (['kic-click'].includes(attr.name))
-                    this.#domDictionary.push({element: el, path:attr.value, isDataRef: false});
+                    this.#domDictionary.push({element: el, directive: attr.name, path:attr.value, kictype: "handler"});
             });
 
         });
+
+        const walker = document.createTreeWalker(tag, NodeFilter.SHOW_TEXT, null, false);
+        while (walker.nextNode()) {
+            if (walker.currentNode.nodeValue.includes("{{") && walker.currentNode.nodeValue.includes("}}"))
+            {
+                let paths = this.#getInterpolationPaths(walker.currentNode.nodeValue);
+                paths.forEach(p=>{
+                    this.#domDictionary.push({element: walker.currentNode.parentElement, directive: "interpolation", path:p, kictype: "interpolation"});
+                });
+            }
+        }
+    }
+
+    #removeFromDomDictionary(element) 
+    {
+        this.#domDictionary = this.#domDictionary.filter(item => 
+            item.element !== element && !element.contains(item.element)
+        );
     }
 
     #bindClickEvents(element) 
