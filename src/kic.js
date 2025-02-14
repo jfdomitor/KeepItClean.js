@@ -11,9 +11,7 @@ class KicApp {
     #appElement; 
     #appData; 
     #appDataProxy; 
-    #interpolatedElements = []; 
     #foreachTemplates = []; 
-    #inputBindings = []; 
     #eventHandlers = {};
     #consoleLogs = [];
     #domDictionary = []; //Reference dom from paths
@@ -56,18 +54,20 @@ class KicApp {
         }
        
         this.#buildDomDictionary(this.#appElement);
+        this.#setupBindings('kic');
+        this.#applyProxyChangesToDOM('kic', this.#appDataProxy);
+        if (this.#enableInterpolation)
+        {
+            this.#interpolateDOM();  // Initial interpolation on page load
+        }
+        
         // this.#collectForEachTemplates(); 
         // this.#bindForEach();
         // this.#collectInputBindings();
         // this.#bindInputs();
-        this.#applyProxyChangesToDOM('kic', this.#appDataProxy);
-        this.#bindClickEvents();
+     
 
-        if (this.#enableInterpolation)
-        {
-            this.#collectInterpolatedElements(); // Collect all interpolated elements on load
-            this.#interpolateDOM();  // Initial interpolation on page load
-        }
+
     }
 
     getData()
@@ -150,33 +150,53 @@ class KicApp {
     
 
 
-    #collectInputBindings() {
-        const inputs = this.#appElement.querySelectorAll("[kic-bind]");
-        inputs.forEach(el => {
+   
+    #buildDomDictionary(element)
+    {
+        const tag = element || this.#appElement;
 
-            let isValid = true;
+        this.#domDictionary = [];
+        tag.querySelectorAll("[kic-*]").forEach(el => {
+            const kicAttributes = el.getAttributeNames()
+            .filter(attr => attr.startsWith("kic-"))
+            .map(attr => ({ name: attr, value: el.getAttribute(attr) }));
 
-            const bindingpath = el.getAttribute("kic-bind");
-            if (!bindingpath)
-                isValid=false;
-            if (!bindingpath.includes('.'))
-                isValid=false;
+            kicAttributes.forEach(attr =>
+            {
+                if (['kic-foreach'].includes(attr.name))
+                    this.#domDictionary.push({element: el, directive: attr.name,  path:attr.value, kictype: "template", needsrefresh: false});
 
-            const isDuplicate = this.#inputBindings.some(item => 
-                item.element === el && item.path === bindingpath
-            );
+                //if (['kic-hide', 'kic-show'].includes(attr.name))
+                //    this.#domDictionary.push({element: el, directive: attr.name, path:attr.value, kictype: "pathbinding", needsrefresh: false});
 
-            if (!isDuplicate && isValid)
-                this.#inputBindings.push({element: el, path:bindingpath});
+                if (['kic-bind'].includes(attr.name))
+                    this.#domDictionary.push({element: el, directive: attr.name, path:attr.value, kictype: "binding", needsrefresh: true});
 
+                if (['kic-click'].includes(attr.name))
+                    this.#domDictionary.push({element: el, directive: attr.name, path:attr.value, kictype: "handler", needsrefresh: true});
+            });
 
         });
+
+        const walker = document.createTreeWalker(tag, NodeFilter.SHOW_TEXT, null, false);
+        while (walker.nextNode()) {
+            if (walker.currentNode.nodeValue.includes("{{") && walker.currentNode.nodeValue.includes("}}"))
+            {
+                let paths = this.#getInterpolationPaths(walker.currentNode.nodeValue);
+                paths.forEach(p=>{
+                    this.#domDictionary.push({element: walker.currentNode.parentElement, directive: "interpolation", path:p, kictype: "interpolation"});
+                });
+            }
+        }
     }
 
-    #setupTemplates(path) 
+    #removeFromDomDictionary(element) 
     {
-
+        this.#domDictionary = this.#domDictionary.filter(item => 
+            item.element !== element && !element.contains(item.element)
+        );
     }
+  
 
     #setupBindings(path) 
     {
@@ -187,15 +207,15 @@ class KicApp {
         if (path.toLowerCase()=='kic')
             workscope = this.#domDictionary;
         else
-            workscope= this.#domDictionary.filter(p=> p.path.includes(path));
+            workscope= this.#domDictionary.filter(p=> p.path.includes(path) && p.needsrefresh);
 
     
         workscope.forEach(item => 
         {
 
-            if (item.directive==="kic-bind")
+            if (item.directive==="kic-bind" && !item.element.dataset.kicBindBound)
             {
-
+                item.needsrefresh = false;
                 item.element.addEventListener("input", (event) => {
 
                     const keys = item.path.match(/[^.[\]]+/g); // Extracts both object keys and array indices
@@ -241,14 +261,63 @@ class KicApp {
                         target[valuekey] =  item.element.value;
                     }
                 });
+
+                // Mark the element as bound
+                item.element.dataset.kicBindBound = "true";  
+
+            }
+
+            if (item.directive=== "kic-click" && !item.element.dataset.kicClickBound)
+            {
+                item.needsrefresh = false;
+                let match = item.path.match(/^(\w+)\((.*?)\)$/);
+                if (match) {
+                    let functionName = match[1];  // Function name (e.g., handleDeleteCar)
+                    let argExpression = match[2]; // Arguments inside parentheses (e.g., car)
+
+                    item.element.addEventListener("click", (event) => {
+                        // Resolve arguments dynamically
+                        let arglist = argExpression.split(",").map(arg => arg.trim()); // Split multiple arguments
+                        let args = arglist.map(arg => {
+                            if (arg === "event") 
+                                return event; // Allow `event` as a parameter
+
+                            const path = event.target.getAttribute("kic-path"); 
+                            if (path)
+                            {
+                                const varname = event.target.getAttribute("kic-varname"); 
+                                if (arg!=varname)
+                                {
+                                    console.warn(`Error The variable ${arg} used in ${functionName} does not match the kic-foreach expression, should be '${varname}'`);
+                                }
+                                return this.#getValueByPath(path);
+                            }
+                            else
+                            return this.#getValueByPath(arg);
+
+                        });
+                        
+                        // Call the function from the handlers object
+                        if (this.#eventHandlers[functionName]) {
+                            this.#eventHandlers[functionName].apply(this, args);
+                        } else {
+                            console.warn(`Handler function '${functionName}' not found.`);
+                        }
+                    });
+
+                    // Mark the element as bound
+                    item.element.dataset.kicClickBound = "true";  
+
+                } else {
+                    console.warn(`Invalid kic-click expression: ${expression}`);
+                }
             }
 
         });
     
-    
     }
 
-    #collectForEachTemplates() 
+    #setupTemplates() 
     {
         this.#appElement.querySelectorAll("[kic-foreach]").forEach(template => {
 
@@ -281,7 +350,7 @@ class KicApp {
         });
     }
 
-    #bindForEachOnChange(path, array, operation) 
+    #renderTemplates(path, array, operation) 
     {
 
         if (!path)
@@ -460,107 +529,66 @@ class KicApp {
     //     }
     // }
 
-    #buildDomDictionary(element)
-    {
-        const tag = element || this.#appElement;
+   
 
-        this.#domDictionary = [];
-        tag.querySelectorAll("[kic-*]").forEach(el => {
-            const kicAttributes = el.getAttributeNames()
-            .filter(attr => attr.startsWith("kic-"))
-            .map(attr => ({ name: attr, value: el.getAttribute(attr) }));
+    // #bindClickEvents(element) 
+    // {
+    //     if (!element)
+    //         element= this.#appElement;
 
-            kicAttributes.forEach(attr =>
-            {
-                if (['kic-foreach'].includes(attr.name))
-                    this.#domDictionary.push({element: el, directive: attr.name,  path:attr.value, kictype: "template"});
-
-                if (['kic-bind', 'kic-hide', 'kic-show'].includes(attr.name))
-                    this.#domDictionary.push({element: el, directive: attr.name, path:attr.value, kictype: "pathbinding"});
-
-                if (['kic-click'].includes(attr.name))
-                    this.#domDictionary.push({element: el, directive: attr.name, path:attr.value, kictype: "handler"});
-            });
-
-        });
-
-        const walker = document.createTreeWalker(tag, NodeFilter.SHOW_TEXT, null, false);
-        while (walker.nextNode()) {
-            if (walker.currentNode.nodeValue.includes("{{") && walker.currentNode.nodeValue.includes("}}"))
-            {
-                let paths = this.#getInterpolationPaths(walker.currentNode.nodeValue);
-                paths.forEach(p=>{
-                    this.#domDictionary.push({element: walker.currentNode.parentElement, directive: "interpolation", path:p, kictype: "interpolation"});
-                });
-            }
-        }
-    }
-
-    #removeFromDomDictionary(element) 
-    {
-        this.#domDictionary = this.#domDictionary.filter(item => 
-            item.element !== element && !element.contains(item.element)
-        );
-    }
-
-    #bindClickEvents(element) 
-    {
-        if (!element)
-            element= this.#appElement;
-
-        element.querySelectorAll("[kic-click]").forEach(el => {
-            const expression = el.getAttribute("kic-click").trim();
+    //     element.querySelectorAll("[kic-click]").forEach(el => {
+    //         const expression = el.getAttribute("kic-click").trim();
 
             
-            // Check if the event is already bound
-            if (el.dataset.kicClickBound) return; 
+    //         // Check if the event is already bound
+    //         if (el.dataset.kicClickBound) return; 
 
-            let match = expression.match(/^(\w+)\((.*?)\)$/);
-            if (match) {
-                let functionName = match[1];  // Function name (e.g., handleDeleteCar)
-                let argExpression = match[2]; // Arguments inside parentheses (e.g., car)
+    //         let match = expression.match(/^(\w+)\((.*?)\)$/);
+    //         if (match) {
+    //             let functionName = match[1];  // Function name (e.g., handleDeleteCar)
+    //             let argExpression = match[2]; // Arguments inside parentheses (e.g., car)
 
-                el.addEventListener("click", (event) => {
-                    // Resolve arguments dynamically
-                    let arglist = argExpression.split(",").map(arg => arg.trim()); // Split multiple arguments
-                    let args = arglist.map(arg => {
-                        if (arg === "event") 
-                            return event; // Allow `event` as a parameter
+    //             el.addEventListener("click", (event) => {
+    //                 // Resolve arguments dynamically
+    //                 let arglist = argExpression.split(",").map(arg => arg.trim()); // Split multiple arguments
+    //                 let args = arglist.map(arg => {
+    //                     if (arg === "event") 
+    //                         return event; // Allow `event` as a parameter
 
-                        const path = event.target.getAttribute("kic-path"); 
-                        if (path)
-                        {
-                            const varname = event.target.getAttribute("kic-varname"); 
-                            if (arg!=varname)
-                            {
-                                  console.warn(`Error The variable ${arg} used in ${functionName} does not match the kic-foreach expression, should be '${varname}'`);
-                            }
-                            return this.#getValueByPath(path);
-                        }
-                        else
-                           return this.#getValueByPath(arg);
+    //                     const path = event.target.getAttribute("kic-path"); 
+    //                     if (path)
+    //                     {
+    //                         const varname = event.target.getAttribute("kic-varname"); 
+    //                         if (arg!=varname)
+    //                         {
+    //                               console.warn(`Error The variable ${arg} used in ${functionName} does not match the kic-foreach expression, should be '${varname}'`);
+    //                         }
+    //                         return this.#getValueByPath(path);
+    //                     }
+    //                     else
+    //                        return this.#getValueByPath(arg);
 
-                    });
+    //                 });
                     
-                    // Call the function from the handlers object
-                    if (this.#eventHandlers[functionName]) {
-                        this.#eventHandlers[functionName].apply(this, args);
-                    } else {
-                        console.warn(`Handler function '${functionName}' not found.`);
-                    }
-                });
+    //                 // Call the function from the handlers object
+    //                 if (this.#eventHandlers[functionName]) {
+    //                     this.#eventHandlers[functionName].apply(this, args);
+    //                 } else {
+    //                     console.warn(`Handler function '${functionName}' not found.`);
+    //                 }
+    //             });
 
-                 // Mark the element as bound
-                 el.dataset.kicClickBound = "true";  
+    //              // Mark the element as bound
+    //              el.dataset.kicClickBound = "true";  
 
-            } else {
-                console.warn(`Invalid kic-click expression: ${expression}`);
-            }
+    //         } else {
+    //             console.warn(`Invalid kic-click expression: ${expression}`);
+    //         }
         
     
            
-        });
-    }
+    //     });
+    // }
     
     
 
