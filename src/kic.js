@@ -16,6 +16,7 @@ class KicApp {
     #inputBindings = []; 
     #eventHandlers = {};
     #consoleLogs = [];
+    #domDictionary = []; //Reference dom from paths
 
     constructor(data, enableInternalId) {
         this.#appData = data;
@@ -512,7 +513,24 @@ class KicApp {
     //     }
     // }
 
-    
+    #buildDomDictionary()
+    {
+        this.#domDictionary = [];
+        this.#appElement.querySelectorAll("[kic-*]").forEach(el => {
+            const kicAttributes = el.getAttributeNames()
+            .filter(attr => attr.startsWith("kic-"))
+            .map(attr => ({ name: attr, value: el.getAttribute(attr) }));
+
+            kicAttributes.forEach(attr =>
+            {
+                if (['kic-bind', 'kic-hide', 'kic-show', 'kic-foreach'].includes(attr.name))
+                    this.#domDictionary.push({element: el, path:attr.value, isDataRef: true});
+                if (['kic-click'].includes(attr.name))
+                    this.#domDictionary.push({element: el, path:attr.value, isDataRef: false});
+            });
+
+        });
+    }
 
     #bindClickEvents(element) 
     {
