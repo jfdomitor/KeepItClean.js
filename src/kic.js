@@ -39,14 +39,14 @@ class KicApp {
 
         }, this.#appData);
 
-        if (this.#enableKicId && ! this.#appDataProxy.hasOwnProperty('kicId')) 
-            this.#appDataProxy.kicId = ++this.#kicId;  // Assign a new unique ID
-        
-    
+       
         this.#buildDomDictionary(this.#appElement);
         this.#renderTemplates('kic', this.#appDataProxy, 'init');
         this.#setupBindings('kic');
         this.#applyProxyChangesToDOM('kic', this.#appDataProxy);
+
+        if (this.#enableKicId && ! this.#appDataProxy.hasOwnProperty('kicId')) 
+            this.#appDataProxy.kicId = ++this.#kicId;  // Assign a new unique ID
    
     }
 
@@ -396,12 +396,11 @@ class KicApp {
 
         if (!path)
             throw new Error('renderTemplates was called without path');
-
-        
+  
         if (path.includes('['))
             return; //throw new Error('renderTemplates was called with an object in the array');
 
-        let isSinglePush = false; //operation === "push";
+        let isSinglePush = operation === "push";
         let templates = [];
         if (path.toLowerCase()==='kic')
             templates = this.#domDictionary.filter(p=> p.kictype==='template');
@@ -423,15 +422,19 @@ class KicApp {
            if ((foreacharray.length - template.element.children.length) !== 1)
                 isSinglePush=false;
 
+           let counter=0;
             if (!isSinglePush)
             {
                 this.#removeFromDomDictionary(template.element);
                 template.element.innerHTML = ""; // Clear list
             }
+            else
+            {
+                counter = foreacharray.length-1;
+                foreacharray = foreacharray.arr.slice(-1);
+            }
 
         
-
-            let counter=0;
             foreacharray.forEach(item => {
                 const newtag = document.createElement(template.templateTagName);
                 newtag.innerHTML = template.templateMarkup;
@@ -642,123 +645,88 @@ class KicApp {
 
    
     
-    #applyProxyChangesToDOM(path, value, fullupdate) 
+    #applyProxyChangesToDOM(path, value) 
     {
+      
         //console.log(path, value);
-        function interpolate(path, value, instance)
+        function interpolate(instance)
         {
-            const interpolations = instance.#domDictionary.filter(p=>p.kictype==="interpolation" && p.expressions.includes(path));
-
+            const interpolations = instance.#domDictionary.filter(p=>p.kictype==="interpolation");
             interpolations.forEach(t=>
             {
+                let count=0;
                 let content= t.templateMarkup;
-                t.expressions.forEach(expr=> {
+                t.expressions.forEach(expr=> 
+                {
+                
+                    let exprvalue = instance.#getValueByPath(expr);
+                    if (!exprvalue)
+                        return;
 
-                    let exprvalue = "";
-                    if (typeof value === "object" || path.toLowerCase()==='kic') 
-                        exprvalue = JSON.stringify(value)
-                    else
-                        exprvalue = value;
-
-                    if (expr===path)
-                    {
-                        const regex = new RegExp(`{{\\s*${expr}\\s*}}`, 'g');
-                        content = content.replace(regex, exprvalue);
-                    }
+                    if (typeof exprvalue === "object") 
+                        exprvalue = JSON.stringify(exprvalue)
+                  
+                    count++;
+                    const regex = new RegExp(`{{\\s*${expr.replace(/[.[\]]/g, '\\$&')}\\s*}}`, 'g');
+                    content = content.replace(regex, exprvalue);        
+                    
                 });
+                if (count>0)
+                    t.node.textContent = content;
 
-                t.node.textContent = content;
-
-               
             });
-
-            if (fullupdate)
-            {
-                Object.keys(value).forEach(key => {
-                    let tempobj = value[key];
-                    if (tempobj !== undefined && tempobj !== null) {
-                        const newPath = Array.isArray(value) && /^\d+$/.test(key) 
-                            ? `${path}[${key}]` 
-                            : `${path}.${key}`;
-            
-                            interpolate(newPath, tempobj, instance);
-                    }
-                });
-
-            }
 
         }
 
        
-
         function updateElements(path, value, instance)
         {
 
-        }
-
-        if (this.#isPrimitive(value))
-        {
-            const kicbind = this.#domDictionary.filter(p=>p.kictype==="binding" && p.path===path && p.directive==='kic-bind');
-            kicbind.forEach(t=>
-            {
-                if (t.element.type === "checkbox") {
-                    t.element.checked = value;
-                } else if (t.element.type === "radio") {
-                    t.element.checked = t.element.value === value;
-                } else {
-                    t.element.value = value;
-                }                     
-            });
-
-            const kichide = this.#domDictionary.filter(p=>p.kictype==="oneway" && p.path===path && p.directive==='kic-hide');
-            kichide.forEach(t=>
-            {
-                t.element.style.display = value ? "none" : "";               
-            });
-
-            const kicshow = this.#domDictionary.filter(p=>p.kictype==="oneway" && p.path===path && p.directive==='kic-show');
-            kicshow.forEach(t=>
-            {
-                t.element.style.display = value ? "" : "none";
-          
-            });
-        }
-        else
-        {
-           
-            Object.keys(value).forEach(key => {
-                let tempobj = value[key];
-                if (tempobj !== undefined && tempobj !== null) {
-                    const newPath = Array.isArray(value) && /^\d+$/.test(key) 
-                        ? `${path}[${key}]` 
-                        : `${path}.${key}`;
-        
-                    this.#applyProxyChangesToDOM(newPath, tempobj);
-                }
-            });
-        
-
-        }
-
-        //Interpolate
-        if (fullupdate)
-        {
-            interpolate('kic',value,this);
-        }
-        else
-        {
-            if (path.includes('.')) {
-                const parts = path.split('.');
-                let topdown = '';
-                parts.forEach(p => 
+                const kicbind = instance.#domDictionary.filter(p=>p.kictype==="binding" && ((instance.#isPrimitive(value) && (p.path===path)) || p.path!=="") && p.directive==='kic-bind');
+                kicbind.forEach(t=>
                 {
-                    topdown+=p;
-                    let v = this.#getValueByPath(topdown);
-                    interpolate(topdown,v,this);
-                    topdown+='.';
-               });
-            }
+                    let boundvalue = value;
+                    if (kicbind.length> 1 || !instance.#isPrimitive(boundvalue))
+                        boundvalue = instance.#getValueByPath(t.path);
+
+                    if (t.element.type === "checkbox") {
+                        t.element.checked = boundvalue;
+                    } else if (t.element.type === "radio") {
+                        t.element.checked = t.element.value === boundvalue;
+                    } else {
+                        t.element.value = boundvalue;
+                    }                     
+                });
+
+                const kichide = instance.#domDictionary.filter(p=>p.kictype==="oneway" && ((instance.#isPrimitive(value) && (p.path===path)) || p.path!=="") && p.directive==='kic-hide');
+                kichide.forEach(t=>
+                {
+                    let boundvalue = value;
+                    if (kichide.length> 1  || !instance.#isPrimitive(boundvalue))
+                        boundvalue = instance.#getValueByPath(t.path);
+
+                    t.element.style.display = boundvalue ? "none" : "";               
+                });
+
+                const kicshow = instance.#domDictionary.filter(p=>p.kictype==="oneway" && ((instance.#isPrimitive(value) && (p.path===path)) || p.path!=="") && p.directive==='kic-show');
+                kicshow.forEach(t=>
+                {
+                    let boundvalue = value;
+                    if (kichide.length> 1  || !instance.#isPrimitive(boundvalue))
+                        boundvalue = instance.#getValueByPath(t.path);
+
+                    t.element.style.display = boundvalue ? "" : "none";
+            
+                });
+           
         }
+
+        /****** Interpolation ******/
+        interpolate(this);
+       
+        /******* Element boinding ******/
+        updateElements(path,value,this);
+
     }
 
     // #applyProxyChangesToDOM(path, value) 
@@ -897,14 +865,28 @@ class KicApp {
 
     // }
 
+    // #getValueByPath(path) {
+    //     const keys = path.match(/[^.[\]]+/g);
+    //     let target = this.#appDataProxy;
+    //     keys.forEach(key => {
+    //         if (key.toLowerCase() !== 'kic') {
+    //             if (target) target = target[key];
+    //         }
+    //     });
+    //     return target;
+    // }
+
     #getValueByPath(path) {
         const keys = path.match(/[^.[\]]+/g);
         let target = this.#appDataProxy;
-        keys.forEach(key => {
-            if (key.toLowerCase() !== 'kic') {
-                if (target) target = target[key];
-            }
-        });
+    
+        // Loop with for (faster than forEach)
+        for (let i = 0; i < keys.length; i++) {
+            if (i === 0 && keys[i].toLowerCase() === 'kic') continue; // Skip 'kic' only if it's the first key
+            if (!target) return undefined; // Exit early if target becomes null/undefined
+            target = target[keys[i]];
+        }
+    
         return target;
     }
 
