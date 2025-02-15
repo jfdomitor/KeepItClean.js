@@ -92,6 +92,7 @@
         var appElement = document.getElementById("app");
         var kicapp = getKICApp(dataset, true);
         kicapp.enableConsoleLog(1, true);
+        kicapp.enableConsoleLog(4, true);
         //kicapp.enableInterpolation(true);
         kicapp.addHandler("handleDeleteCar", function(event, data) 
         {
@@ -125,14 +126,14 @@
         kicapp.mount(appElement);
 
 
-        var t = kicapp.getData();
-        let temparr = [];
-        for(i=0; i<3; i++){
-            var car = {brand:"Mercedes", serial:"99999"};
-            temparr.push(car);
-        }
+        // var t = kicapp.getData();
+        // let temparr = [];
+        // for(i=0; i<3; i++){
+        //     var car = {brand:"Mercedes", serial:"99999"};
+        //     temparr.push(car);
+        // }
 
-        t.model.cars= temparr;
+        // t.model.cars= temparr;
 
    
         

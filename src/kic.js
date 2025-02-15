@@ -32,11 +32,8 @@ class KicApp {
             if (log.active)
                 console.log(log.name, path, value, key);
 
-            if (Array.isArray(value))
-            {
-                this.#renderTemplates(path, value, key);   
-            }
-
+          
+            this.#renderTemplates(path, value, key);   
             this.#setupBindings(path);
             this.#applyProxyChangesToDOM(path, value);
 
@@ -138,6 +135,20 @@ class KicApp {
     {
         const tag = element || this.#appElement;
 
+        const templateChildren=[];
+
+        function collectDescendants(ce) {
+            templateChildren.push(ce);
+            
+            for (let i = 0; i < ce.children.length; i++) {
+                collectDescendants(ce.children[i]);
+            }
+        }
+        tag.querySelectorAll("[kic-foreach]").forEach(parent => {
+            Array.from(parent.children).forEach(child => collectDescendants(child));
+        });
+
+
         const kicelements = [...tag.querySelectorAll("*")].filter(el => 
             [...el.attributes].some(attr => attr.name.startsWith("kic-"))
         );
@@ -147,12 +158,20 @@ class KicApp {
             .filter(attr => attr.startsWith("kic-"))
             .map(attr => ({ name: attr, value: el.getAttribute(attr) }));
 
+            //Skip all children of templates since they will be dealt with later on template rendering
+            if (templateChildren.includes(el))
+                return;
+
             kicAttributes.forEach(attr =>
             {
    
                 if (['kic-foreach'].includes(attr.name))
                 {
-                    this.#domDictionary.push({element: el.parentElement, node:el.parentElement, directive: attr.name,  path:attr.value, kictype: "template", isNew: true, templateMarkup: this.#cleanWhitespace(el.innerHTML), templateTagName: el.localName });
+                    let templateHtml = el.innerHTML.trim()
+                        .replace(/>\s+</g, '><')  // Remove spaces between tags
+                        .replace(/(\S)\s{2,}(\S)/g, '$1 $2'); // Reduce multiple spaces to one inside text nodes
+
+                    this.#domDictionary.push({element: el.parentElement, node:el.parentElement, directive: attr.name,  path:attr.value, kictype: "template", isNew: true, templateMarkup: templateHtml, templateTagName: el.localName });
                     el.remove();
                 }
 
@@ -180,6 +199,14 @@ class KicApp {
                     });
                 }
             }
+        }
+
+        let log = this.#getConsoleLog(4);
+        if (log.active){
+            console.log('dom dictionary: ' +  this.#domDictionary.length);
+            this.#domDictionary.forEach(t=> {
+                console.log(t);
+            });
         }
     }
 
@@ -353,7 +380,7 @@ class KicApp {
 
         
         if (path.includes('['))
-            throw new Error('renderTemplates was called with an object in the array');
+            return; //throw new Error('renderTemplates was called with an object in the array');
 
         let isSinglePush = false; //operation === "push";
         let templates = [];
@@ -372,7 +399,7 @@ class KicApp {
                 foreacharray= array;
 
             if (!Array.isArray(foreacharray))
-                throw new Error('renderTemplates could not get array, ' + path);
+                return; //throw new Error('renderTemplates could not get array, ' + path);
 
            if ((foreacharray.length - template.element.children.length) !== 1)
                 isSinglePush=false;
@@ -599,44 +626,62 @@ class KicApp {
     #applyProxyChangesToDOM(path, value) 
     {
         //console.log(path, value);
-        const interpolations = this.#domDictionary.filter(p=>p.kictype==="interpolation" && p.path===path);
-        interpolations.forEach(t=>
+        function interpolate(path, value, instance)
         {
-              t.node.textContent =  t.templateMarkup.replace(/{{(.*?)}}/g, (_, expression) => {
+            const interpolations = instance.#domDictionary.filter(p=>p.kictype==="interpolation" && p.path===path);
+            interpolations.forEach(t=>
+            {
+                t.node.textContent =  t.templateMarkup.replace(/{{(.*?)}}/g, (_, expression) => {
                 expression = expression.trim();
 
-                if (expression=== t.path)
-                {
-                  
-                    //If it's the root
-                    if (expression.toLowerCase()=='kic') {
-                        return JSON.stringify(value);
-                    }
-    
-                    //Index (Allowed as interpolation in kic-foreach)
-                    if (expression.toLowerCase()=='index') 
+                    if (expression=== t.path)
                     {
-                        let idx = t.element.getAttribute('kic-index');
-                        let p = t.element.parentElement;
-                        let safecnt=0;
-                        while (!idx && p)
-                        {
-                            safecnt++;
-                            idx = p.getAttribute('kic-index');
-                            p=p.parentElement;
-                            if (safecnt>100)
-                                break;
+                    
+                        //If it's the root
+                        if (expression.toLowerCase()=='kic') {
+                            return JSON.stringify(value);
                         }
-                        if (idx)
-                            return idx;
-                    }
-    
-                    return typeof value === "object" ? JSON.stringify(value) : value;
+        
+                        //Index (Allowed as interpolation in kic-foreach)
+                        if (expression.toLowerCase()=='index') 
+                        {
+                            let idx = t.element.getAttribute('kic-index');
+                            let p = t.element.parentElement;
+                            let safecnt=0;
+                            while (!idx && p)
+                            {
+                                safecnt++;
+                                idx = p.getAttribute('kic-index');
+                                p=p.parentElement;
+                                if (safecnt>100)
+                                    break;
+                            }
+                            if (idx)
+                                return idx;
+                        }
+        
+                        return typeof value === "object" ? JSON.stringify(value) : value;
 
-                }
+                    }
+                });
+        
             });
-      
-        });
+        }
+
+        if (path==='kic')
+            interpolate(path,value,this);
+
+        if (path.includes('.')) {
+            const parts = path.split('.');
+            let topdown = '';
+            parts.forEach(p => 
+            {
+                topdown+=p;
+                let v = this.#getValueByPath(topdown);
+                interpolate(topdown,v,this);
+                topdown+='.';
+           });
+        }
 
         if (this.#isPrimitive(value))
         {
@@ -832,12 +877,12 @@ class KicApp {
     }
 
 
-    #cleanWhitespace(html) 
-    {
-        return html
-            .replace(/>\s+</g, '><')  // Remove spaces between tags
-            .replace(/(\S)\s{2,}(\S)/g, '$1 $2'); // Reduce multiple spaces to one inside text nodes
-    }
+    // #cleanWhitespace(html) 
+    // {
+    //     return html
+    //         .replace(/>\s+</g, '><')  // Remove spaces between tags
+    //         .replace(/(\S)\s{2,}(\S)/g, '$1 $2'); // Reduce multiple spaces to one inside text nodes
+    // }
 
     //Get interpolation data paths from a string found in the dom
     #getInterpolationPaths(str) {
@@ -951,7 +996,8 @@ class KicApp {
         this.#consoleLogs = [
             {id: 1, name: "Proxy call back: ", active:false},
             {id: 2, name: "Update dom on proxy change: ", active:false},
-            {id: 3, name: "Update proxy on user input: ", active:false}
+            {id: 3, name: "Update proxy on user input: ", active:false},
+            {id: 4, name: "Build dom dictionary: ", active:false}
         ];
     } 
 
