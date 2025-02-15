@@ -33,9 +33,9 @@ class KicApp {
                 console.log(log.name, path, value, key);
 
           
-            this.#renderTemplates(path, value, key);   
-            this.#setupBindings(path);
-            this.#applyProxyChangesToDOM(path, value);
+            //this.#renderTemplates(path, value, key);   
+            //this.#setupBindings(path);
+            //this.#applyProxyChangesToDOM(path, value);
 
         }, this.#appData);
 
@@ -171,18 +171,27 @@ class KicApp {
                         .replace(/>\s+</g, '><')  // Remove spaces between tags
                         .replace(/(\S)\s{2,}(\S)/g, '$1 $2'); // Reduce multiple spaces to one inside text nodes
 
-                    this.#domDictionary.push({element: el.parentElement, node:el.parentElement, directive: attr.name,  path:attr.value, kictype: "template", isNew: true, templateMarkup: templateHtml, templateTagName: el.localName });
+                    const odo = this.#createDomDictionaryObject(el.parentElement, null, attr.name, attr.value, "template", true, templateHtml, el.localName, null);
+                    this.#domDictionary.push(odo);
                     el.remove();
                 }
 
                 if (['kic-hide', 'kic-show'].includes(attr.name))
-                    this.#domDictionary.push({element: el, node:el, directive: attr.name, path:attr.value, kictype: "oneway", isNew: true});
+                {
+                    const odo = this.#createDomDictionaryObject(el,null,attr.name,attr.value, "oneway", true,"","",null);
+                    this.#domDictionary.push(odo);
+                }
 
                 if (['kic-bind'].includes(attr.name))
-                    this.#domDictionary.push({element: el, node:el, directive: attr.name, path:attr.value, kictype: "binding", isNew: true, templateMarkup: "", templateTagName: ""});
+                {
+                    const odo = this.#createDomDictionaryObject(el,null,attr.name,attr.value, "binding", true,"","",null);
+                    this.#domDictionary.push(odo);
+                }
 
-                if (['kic-click'].includes(attr.name))
-                    this.#domDictionary.push({element: el, node:el, directive: attr.name, path:attr.value, kictype: "handler", isNew: true, templateMarkup: "", templateTagName: ""});
+                if (['kic-click'].includes(attr.name)){
+                    const odo = this.#createDomDictionaryObject(el,null,attr.name,attr.value, "handler", true,"","",null);
+                    this.#domDictionary.push(odo);
+                }
             });
 
         });
@@ -194,9 +203,8 @@ class KicApp {
                 if (walker.currentNode.nodeValue.includes("{{") && walker.currentNode.nodeValue.includes("}}"))
                 {
                     let paths = this.#getInterpolationPaths(walker.currentNode.nodeValue);
-                    paths.forEach(p=>{
-                        this.#domDictionary.push({element: walker.currentNode.parentElement, node: walker.currentNode, directive: "interpolation", path:p, kictype: "interpolation", isNew: true, templateMarkup: walker.currentNode.nodeValue, templateTagName: ""});
-                    });
+                    const odo = this.#createDomDictionaryObject(walker.currentNode.parentElement,walker.currentNode,"interpolation","", "interpolation", true,walker.currentNode.nodeValue,"",paths);
+                    this.#domDictionary.push(odo);
                 }
             }
         }
@@ -216,6 +224,17 @@ class KicApp {
             item.element !== element && !element.contains(item.element)
         );
     }
+
+    #createDomDictionaryObject(element, node, directive, path, kictype, isnew, templateMarkup, templateTagName, expressions)
+    {
+        if (!expressions)
+        {
+            expressions = [];
+            expressions.push(path);
+        }
+
+        return {element: element, node:node, directive: directive,  path:path, kictype: kictype, isnew: isnew, templateMarkup: templateMarkup, templateTagName: templateTagName, expressions: expressions  };
+    }
   
 
     #setupBindings(path) 
@@ -227,7 +246,7 @@ class KicApp {
         if (path.toLowerCase()=='kic')
             workscope = this.#domDictionary;
         else
-            workscope= this.#domDictionary.filter(p=> p.path.includes(path) && p.isNew);
+            workscope= this.#domDictionary.filter(p=> p.path.includes(path) && p.isnew);
 
     
         workscope.forEach(item => 
@@ -235,7 +254,7 @@ class KicApp {
 
             if (item.directive==="kic-bind" && !item.element.dataset.kicBindBound)
             {
-                item.isNew = false;
+                item.isnew = false;
                 item.element.addEventListener("input", (event) => {
 
                     const keys = item.path.match(/[^.[\]]+/g); // Extracts both object keys and array indices
@@ -289,7 +308,7 @@ class KicApp {
 
             if (item.directive=== "kic-click" && !item.element.dataset.kicClickBound)
             {
-                item.isNew = false;
+                item.isnew = false;
                 let match = item.path.match(/^(\w+)\((.*?)\)$/);
                 if (match) {
                     let functionName = match[1];  // Function name (e.g., handleDeleteCar)
@@ -628,44 +647,63 @@ class KicApp {
         //console.log(path, value);
         function interpolate(path, value, instance)
         {
-            const interpolations = instance.#domDictionary.filter(p=>p.kictype==="interpolation" && p.path===path);
+            const interpolations = instance.#domDictionary.filter(p=>p.kictype==="interpolation" && p.expressions.includes(path));
+
             interpolations.forEach(t=>
             {
-                t.node.textContent =  t.templateMarkup.replace(/{{(.*?)}}/g, (_, expression) => {
-                expression = expression.trim();
+                let content= t.templateMarkup;
+                t.expressions.forEach(expr=> {
 
-                    if (expression=== t.path)
+                    let exprvalue = "";
+                    if (typeof value === "object" || path.toLowerCase()==='kic') 
+                        exprvalue = JSON.stringify(value)
+                    else
+                        exprvalue = value;
+
+                    if (expr===path)
                     {
-                    
-                        //If it's the root
-                        if (expression.toLowerCase()=='kic') {
-                            return JSON.stringify(value);
-                        }
-        
-                        //Index (Allowed as interpolation in kic-foreach)
-                        if (expression.toLowerCase()=='index') 
-                        {
-                            let idx = t.element.getAttribute('kic-index');
-                            let p = t.element.parentElement;
-                            let safecnt=0;
-                            while (!idx && p)
-                            {
-                                safecnt++;
-                                idx = p.getAttribute('kic-index');
-                                p=p.parentElement;
-                                if (safecnt>100)
-                                    break;
-                            }
-                            if (idx)
-                                return idx;
-                        }
-        
-                        return typeof value === "object" ? JSON.stringify(value) : value;
-
+                        const regex = new RegExp(`{{\\s*${expr}\\s*}}`, 'g');
+                        content = content.replace(regex, exprvalue);
                     }
                 });
-        
+
+                t.node.textContent = content;
+
+               
             });
+
+            //         //Index (Allowed as interpolation in kic-foreach)
+            //         if (expression.toLowerCase()=='index') 
+            //         {
+            //             let idx = t.element.getAttribute('kic-index');
+            //             let p = t.element.parentElement;
+            //             let safecnt=0;
+            //             while (!idx && p)
+            //             {
+            //                 safecnt++;
+            //                 idx = p.getAttribute('kic-index');
+            //                 p=p.parentElement;
+            //                 if (safecnt>100)
+            //                     break;
+            //                 }
+            //                 if (idx)
+            //                     return idx;
+            //             }
+        
+            //             if (typeof value === "object") 
+            //                 return JSON.stringify(value)
+            //             else
+            //                 return value;
+
+                    
+            //     });
+
+            //     t.node.textContent = exprvalue;
+        
+            // });
+
+            
+        
         }
 
         if (path==='kic')
@@ -716,7 +754,6 @@ class KicApp {
             Object.keys(value).forEach(key => {
                 let tempobj = value[key];
                 if (tempobj !== undefined && tempobj !== null) {
-                    // Detect numeric keys (array indices) and format path correctly
                     const newPath = Array.isArray(value) && /^\d+$/.test(key) 
                         ? `${path}[${key}]` 
                         : `${path}.${key}`;
