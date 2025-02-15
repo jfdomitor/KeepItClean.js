@@ -32,18 +32,17 @@ class KicApp {
             if (log.active)
                 console.log(log.name, path, value, key);
 
-          
-            //this.#renderTemplates(path, value, key);   
-            //this.#setupBindings(path);
-            //this.#applyProxyChangesToDOM(path, value);
+            this.#renderTemplates(key, path, value);
+            this.#setupBindings(path);
+            this.#applyProxyChangesToDOM(path, value);
 
         }, this.#appData);
 
        
         this.#buildDomDictionary(this.#appElement);
-        this.#renderTemplates('kic', this.#appDataProxy, 'init');
-        this.#setupBindings('kic');
-        this.#applyProxyChangesToDOM('kic', this.#appDataProxy);
+        this.#renderTemplates();
+        this.#setupBindings();
+        this.#applyProxyChangesToDOM();
 
         if (this.#enableKicId && ! this.#appDataProxy.hasOwnProperty('kicId')) 
             this.#appDataProxy.kicId = ++this.#kicId;  // Assign a new unique ID
@@ -237,10 +236,8 @@ class KicApp {
     }
   
 
-    #setupBindings(path) 
+    #setupBindings(path='kic') 
     {
-        if (!path)
-            throw new error('#setupBindings was called without a path');
 
         let workscope = [];
         if (path.toLowerCase()=='kic')
@@ -389,13 +386,10 @@ class KicApp {
     //     });
     // }
 
-    #renderTemplates(path, array, operation) 
+    #renderTemplates(operation='init', path='kic', array=this.#appDataProxy) 
     {
 
         let foreacharray = [];
-
-        if (!path)
-            throw new Error('renderTemplates was called without path');
   
         if (path.includes('['))
             return; //throw new Error('renderTemplates was called with an object in the array');
@@ -645,7 +639,7 @@ class KicApp {
 
    
     
-    #applyProxyChangesToDOM(path, value) 
+    #applyProxyChangesToDOM(path='kic', value=this.#appDataProxy) 
     {
       
         //console.log(path, value);
