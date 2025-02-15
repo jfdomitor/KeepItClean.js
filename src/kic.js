@@ -54,11 +54,7 @@ class KicApp {
         this.#buildDomDictionary(this.#appElement);
         this.#setupBindings('kic');
         this.#applyProxyChangesToDOM('kic', this.#appDataProxy);
-        if (this.#enableInterpolation)
-        {
-            this.#interpolateDOM();  // Initial interpolation on page load
-        }
-        
+       
         // this.#collectForEachTemplates(); 
         // this.#bindForEach();
         // this.#collectInputBindings();
@@ -180,14 +176,17 @@ class KicApp {
 
         });
 
-        const walker = document.createTreeWalker(tag, NodeFilter.SHOW_TEXT, null, false);
-        while (walker.nextNode()) {
-            if (walker.currentNode.nodeValue.includes("{{") && walker.currentNode.nodeValue.includes("}}"))
-            {
-                let paths = this.#getInterpolationPaths(walker.currentNode.nodeValue);
-                paths.forEach(p=>{
-                    this.#domDictionary.push({element: walker.currentNode.parentElement, node: walker.currentNode, directive: "interpolation", path:p, kictype: "interpolation", isNew: true, templateMarkup: walker.currentNode.nodeValue, templateTagName: ""});
-                });
+        if (this.#enableInterpolation)
+        {
+            const walker = document.createTreeWalker(tag, NodeFilter.SHOW_TEXT, null, false);
+            while (walker.nextNode()) {
+                if (walker.currentNode.nodeValue.includes("{{") && walker.currentNode.nodeValue.includes("}}"))
+                {
+                    let paths = this.#getInterpolationPaths(walker.currentNode.nodeValue);
+                    paths.forEach(p=>{
+                        this.#domDictionary.push({element: walker.currentNode.parentElement, node: walker.currentNode, directive: "interpolation", path:p, kictype: "interpolation", isNew: true, templateMarkup: walker.currentNode.nodeValue, templateTagName: ""});
+                    });
+                }
             }
         }
     }
@@ -591,6 +590,56 @@ class KicApp {
     
     #applyProxyChangesToDOM(path, value) 
     {
+
+        const interplations = this.#domDictionary.filter(p=>p.kictype==="interpolation" && p.path===path);
+        interplations.forEach(t=>
+        {
+              t.node.textContent = t.element.templateMarkUp.replace(/{{(.*?)}}/g, (_, expression) => {
+                expression = expression.trim();
+
+                if (expression=== t.path)
+                {
+                  
+                    //If it's the root
+                    if (expression.toLowerCase()=='kic') {
+                        return JSON.stringify(context);
+                    }
+    
+                    //Index (Allowed as interpolation in kic-foreach)
+                    if (expression.toLowerCase()=='index') 
+                    {
+                        let idx = t.element.getAttribute('kic-index');
+                        let p = t.element.parentElement;
+                        let safecnt=0;
+                        while (!idx && p)
+                        {
+                            safecnt++;
+                            idx = p.getAttribute('kic-index');
+                            p=p.parentElement;
+                            if (safecnt>100)
+                                break;
+                        }
+                        if (idx)
+                            return idx;
+                    }
+    
+                    if (expression.toLowerCase().startsWith('kic.'))
+                        expression = expression.replace('kic.', '');
+                    
+    
+                    const functionBody = `return ${expression}`;
+    
+                    // Use the Function constructor to evaluate the expression dynamically
+                    let result = new Function(...Object.keys(context), functionBody)(...Object.values(context));
+    
+                    // If the result is an object, convert it to JSON string for better display
+                    return typeof result === "object" ? JSON.stringify(result) : result;
+
+                }
+            });
+      
+        });
+
         if (this.#isPrimitive(value))
         {
             const kicbind = this.#domDictionary.filter(p=>p.kictype==="binding" && p.path===path && directive==='kic-bind');
@@ -620,55 +669,7 @@ class KicApp {
         }
         else
         {
-            const interplations = this.#domDictionary.filter(p=>p.kictype==="interpolation" && p.path===path);
-            interplations.forEach(t=>
-            {
-                  t.node.textContent = t.element.templateMarkUp.replace(/{{(.*?)}}/g, (_, expression) => {
-                    expression = expression.trim();
-
-                    if (expression=== t.path)
-                    {
-                      
-                        //If it's the root
-                        if (expression.toLowerCase()=='kic') {
-                            return JSON.stringify(context);
-                        }
-        
-                        //Index (Allowed as interpolation in kic-foreach)
-                        if (expression.toLowerCase()=='index') 
-                        {
-                            let idx = t.element.getAttribute('kic-index');
-                            let p = t.element.parentElement;
-                            let safecnt=0;
-                            while (!idx && p)
-                            {
-                                safecnt++;
-                                idx = p.getAttribute('kic-index');
-                                p=p.parentElement;
-                                if (safecnt>100)
-                                    break;
-                            }
-                            if (idx)
-                                return idx;
-                        }
-        
-                        if (expression.toLowerCase().startsWith('kic.'))
-                            expression = expression.replace('kic.', '');
-                        
-        
-                        const functionBody = `return ${expression}`;
-        
-                        // Use the Function constructor to evaluate the expression dynamically
-                        let result = new Function(...Object.keys(context), functionBody)(...Object.values(context));
-        
-                        // If the result is an object, convert it to JSON string for better display
-                        return typeof result === "object" ? JSON.stringify(result) : result;
-
-                    }
-                });
-          
-            });
-
+           
             Object.keys(value).forEach(key => {
                 let tempobj = value[key];
                 if (tempobj !== undefined && tempobj !== null) {
