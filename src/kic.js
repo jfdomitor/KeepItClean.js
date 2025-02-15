@@ -150,7 +150,12 @@ class KicApp {
         const tag = element || this.#appElement;
 
         this.#domDictionary = [];
-        tag.querySelectorAll("[kic-*]").forEach(el => {
+
+        const kicelements = [...tag.querySelectorAll("*")].filter(el => 
+            [...el.attributes].some(attr => attr.name.startsWith("kic-"))
+        );
+
+        kicelements.forEach(el => {
             const kicAttributes = el.getAttributeNames()
             .filter(attr => attr.startsWith("kic-"))
             .map(attr => ({ name: attr, value: el.getAttribute(attr) }));
@@ -587,14 +592,19 @@ class KicApp {
            
     //     });
     // }
+
+    #applyProxyToDOM() 
+    {
+
+    }
     
     #applyProxyChangesToDOM(path, value) 
     {
-
-        const interplations = this.#domDictionary.filter(p=>p.kictype==="interpolation" && p.path===path);
-        interplations.forEach(t=>
+        console.log(path, value);
+        const interpolations = this.#domDictionary.filter(p=>p.kictype==="interpolation" && p.path===path);
+        interpolations.forEach(t=>
         {
-              t.node.textContent = t.element.templateMarkUp.replace(/{{(.*?)}}/g, (_, expression) => {
+              t.node.textContent = t.templateMarkup.replace(/{{(.*?)}}/g, (_, expression) => {
                 expression = expression.trim();
 
                 if (expression=== t.path)
@@ -602,7 +612,7 @@ class KicApp {
                   
                     //If it's the root
                     if (expression.toLowerCase()=='kic') {
-                        return JSON.stringify(context);
+                        return JSON.stringify(value);
                     }
     
                     //Index (Allowed as interpolation in kic-foreach)
@@ -623,17 +633,17 @@ class KicApp {
                             return idx;
                     }
     
-                    if (expression.toLowerCase().startsWith('kic.'))
-                        expression = expression.replace('kic.', '');
+                    // if (expression.toLowerCase().startsWith('kic.'))
+                    //     expression = expression.replace('kic.', '');
                     
     
-                    const functionBody = `return ${expression}`;
+                    // const functionBody = `return ${expression}`;
     
-                    // Use the Function constructor to evaluate the expression dynamically
-                    let result = new Function(...Object.keys(context), functionBody)(...Object.values(context));
+                    // // Use the Function constructor to evaluate the expression dynamically
+                    // let result = new Function(...Object.keys(value), functionBody)(...Object.values(value));
     
                     // If the result is an object, convert it to JSON string for better display
-                    return typeof result === "object" ? JSON.stringify(result) : result;
+                    return typeof value === "object" ? JSON.stringify(value) : value;
 
                 }
             });
@@ -642,7 +652,7 @@ class KicApp {
 
         if (this.#isPrimitive(value))
         {
-            const kicbind = this.#domDictionary.filter(p=>p.kictype==="binding" && p.path===path && directive==='kic-bind');
+            const kicbind = this.#domDictionary.filter(p=>p.kictype==="binding" && p.path===path && p.directive==='kic-bind');
             kicbind.forEach(t=>
             {
                 if (t.element.type === "checkbox") {
@@ -654,13 +664,13 @@ class KicApp {
                 }                     
             });
 
-            const kichide = this.#domDictionary.filter(p=>p.kictype==="oneway" && p.path===path && directive==='kic-hide');
+            const kichide = this.#domDictionary.filter(p=>p.kictype==="oneway" && p.path===path && p.directive==='kic-hide');
             kichide.forEach(t=>
             {
                 t.element.style.display = value ? "none" : "";               
             });
 
-            const kicshow = this.#domDictionary.filter(p=>p.kictype==="oneway" && p.path===path && directive==='kic-show');
+            const kicshow = this.#domDictionary.filter(p=>p.kictype==="oneway" && p.path===path && p.directive==='kic-show');
             kicshow.forEach(t=>
             {
                 t.element.style.display = value ? "" : "none";
