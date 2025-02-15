@@ -642,7 +642,7 @@ class KicApp {
 
    
     
-    #applyProxyChangesToDOM(path, value) 
+    #applyProxyChangesToDOM(path, value, fullupdate) 
     {
         //console.log(path, value);
         function interpolate(path, value, instance)
@@ -672,53 +672,28 @@ class KicApp {
                
             });
 
-            //         //Index (Allowed as interpolation in kic-foreach)
-            //         if (expression.toLowerCase()=='index') 
-            //         {
-            //             let idx = t.element.getAttribute('kic-index');
-            //             let p = t.element.parentElement;
-            //             let safecnt=0;
-            //             while (!idx && p)
-            //             {
-            //                 safecnt++;
-            //                 idx = p.getAttribute('kic-index');
-            //                 p=p.parentElement;
-            //                 if (safecnt>100)
-            //                     break;
-            //                 }
-            //                 if (idx)
-            //                     return idx;
-            //             }
-        
-            //             if (typeof value === "object") 
-            //                 return JSON.stringify(value)
-            //             else
-            //                 return value;
-
-                    
-            //     });
-
-            //     t.node.textContent = exprvalue;
-        
-            // });
-
+            if (fullupdate)
+            {
+                Object.keys(value).forEach(key => {
+                    let tempobj = value[key];
+                    if (tempobj !== undefined && tempobj !== null) {
+                        const newPath = Array.isArray(value) && /^\d+$/.test(key) 
+                            ? `${path}[${key}]` 
+                            : `${path}.${key}`;
             
-        
+                            interpolate(newPath, tempobj, instance);
+                    }
+                });
+
+            }
+
         }
 
-        if (path==='kic')
-            interpolate(path,value,this);
+       
 
-        if (path.includes('.')) {
-            const parts = path.split('.');
-            let topdown = '';
-            parts.forEach(p => 
-            {
-                topdown+=p;
-                let v = this.#getValueByPath(topdown);
-                interpolate(topdown,v,this);
-                topdown+='.';
-           });
+        function updateElements(path, value, instance)
+        {
+
         }
 
         if (this.#isPrimitive(value))
@@ -763,6 +738,26 @@ class KicApp {
             });
         
 
+        }
+
+        //Interpolate
+        if (fullupdate)
+        {
+            interpolate('kic',value,this);
+        }
+        else
+        {
+            if (path.includes('.')) {
+                const parts = path.split('.');
+                let topdown = '';
+                parts.forEach(p => 
+                {
+                    topdown+=p;
+                    let v = this.#getValueByPath(topdown);
+                    interpolate(topdown,v,this);
+                    topdown+='.';
+               });
+            }
         }
     }
 
@@ -1045,6 +1040,27 @@ class KicApp {
             return {id:-1, name:"", active:false};
         return log;
     }
+
+    #getClosestAttribute(element, name)
+    {
+        let idx = element.getAttribute(name);
+        let p = element.parentElement;
+        let safecnt=0;
+        while (!idx && p)
+        {
+            safecnt++;
+            idx = p.getAttribute('kic-index');
+            p=p.parentElement;
+            if (safecnt>100)
+                break;
+        }
+
+        return idx || "";
+    
+    }
+                   
+      
+    
 
    
     
