@@ -32,6 +32,8 @@ class KicApp {
             let log = this.#getConsoleLog(1);
             if (log.active)
                 console.log(log.name, path, value, key);
+
+             this.#applyProxyChangesToDOM(path, value);
           
             if (Array.isArray(value))
             {
@@ -40,7 +42,7 @@ class KicApp {
             }
 
             // // Update DOM elements like inputs
-            // this.#applyProxyChangesToDOM(path, value);
+        
 
             // if (this.#enableInterpolation)
             //     this.#interpolateDOM(); 
@@ -54,13 +56,7 @@ class KicApp {
         this.#buildDomDictionary(this.#appElement);
         this.#setupBindings('kic');
         this.#applyProxyChangesToDOM('kic', this.#appDataProxy);
-       
-        // this.#collectForEachTemplates(); 
-        // this.#bindForEach();
-        // this.#collectInputBindings();
-        // this.#bindInputs();
-     
-
+   
 
     }
 
@@ -604,7 +600,7 @@ class KicApp {
         const interpolations = this.#domDictionary.filter(p=>p.kictype==="interpolation" && p.path===path);
         interpolations.forEach(t=>
         {
-              t.node.textContent = t.templateMarkup.replace(/{{(.*?)}}/g, (_, expression) => {
+              t.node.textContent =  t.node.textContent.replace(/{{(.*?)}}/g, (_, expression) => {
                 expression = expression.trim();
 
                 if (expression=== t.path)
@@ -633,16 +629,6 @@ class KicApp {
                             return idx;
                     }
     
-                    // if (expression.toLowerCase().startsWith('kic.'))
-                    //     expression = expression.replace('kic.', '');
-                    
-    
-                    // const functionBody = `return ${expression}`;
-    
-                    // // Use the Function constructor to evaluate the expression dynamically
-                    // let result = new Function(...Object.keys(value), functionBody)(...Object.values(value));
-    
-                    // If the result is an object, convert it to JSON string for better display
                     return typeof value === "object" ? JSON.stringify(value) : value;
 
                 }
