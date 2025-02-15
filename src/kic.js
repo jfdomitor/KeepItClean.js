@@ -33,12 +33,11 @@ class KicApp {
             if (log.active)
                 console.log(log.name, path, value, key);
           
-
-            // if (Array.isArray(value))
-            // {
-            //     this.#bindForEachOnChange(path, value, key); // Rerun the binding to re-render elements
+            if (Array.isArray(value))
+            {
+               //this.#bindForEachOnChange(path, value, key); // Rerun the binding to re-render elements
                 
-            // }
+            }
 
             // // Update DOM elements like inputs
             // this.#applyProxyChangesToDOM(path, value);
@@ -49,10 +48,9 @@ class KicApp {
         }, this.#appData);
 
         if (this.#enableKicId && ! this.#appDataProxy.hasOwnProperty('kicId')) 
-        {
             this.#appDataProxy.kicId = ++this.#kicId;  // Assign a new unique ID
-        }
-       
+        
+    
         this.#buildDomDictionary(this.#appElement);
         this.#setupBindings('kic');
         this.#applyProxyChangesToDOM('kic', this.#appDataProxy);
@@ -163,17 +161,21 @@ class KicApp {
 
             kicAttributes.forEach(attr =>
             {
+   
                 if (['kic-foreach'].includes(attr.name))
-                    this.#domDictionary.push({element: el, directive: attr.name,  path:attr.value, kictype: "template", needsrefresh: false});
+                {
+                    this.#domDictionary.push({element: el.parentElement, node:el.parentElement, directive: attr.name,  path:attr.value, kictype: "template", isNew: true, templateMarkup: this.#cleanWhitespace(el.innerHTML), templateTagName: el.localName });
+                    el.remove();
+                }
 
-                //if (['kic-hide', 'kic-show'].includes(attr.name))
-                //    this.#domDictionary.push({element: el, directive: attr.name, path:attr.value, kictype: "pathbinding", needsrefresh: false});
+                if (['kic-hide', 'kic-show'].includes(attr.name))
+                    this.#domDictionary.push({element: el, node:el, directive: attr.name, path:attr.value, kictype: "oneway", isNew: true});
 
                 if (['kic-bind'].includes(attr.name))
-                    this.#domDictionary.push({element: el, directive: attr.name, path:attr.value, kictype: "binding", needsrefresh: true});
+                    this.#domDictionary.push({element: el, node:el, directive: attr.name, path:attr.value, kictype: "binding", isNew: true, templateMarkup: "", templateTagName: ""});
 
                 if (['kic-click'].includes(attr.name))
-                    this.#domDictionary.push({element: el, directive: attr.name, path:attr.value, kictype: "handler", needsrefresh: true});
+                    this.#domDictionary.push({element: el, node:el, directive: attr.name, path:attr.value, kictype: "handler", isNew: true, templateMarkup: "", templateTagName: ""});
             });
 
         });
@@ -184,7 +186,7 @@ class KicApp {
             {
                 let paths = this.#getInterpolationPaths(walker.currentNode.nodeValue);
                 paths.forEach(p=>{
-                    this.#domDictionary.push({element: walker.currentNode.parentElement, directive: "interpolation", path:p, kictype: "interpolation"});
+                    this.#domDictionary.push({element: walker.currentNode.parentElement, node: walker.currentNode, directive: "interpolation", path:p, kictype: "interpolation", isNew: true, templateMarkup: walker.currentNode.nodeValue, templateTagName: ""});
                 });
             }
         }
@@ -207,7 +209,7 @@ class KicApp {
         if (path.toLowerCase()=='kic')
             workscope = this.#domDictionary;
         else
-            workscope= this.#domDictionary.filter(p=> p.path.includes(path) && p.needsrefresh);
+            workscope= this.#domDictionary.filter(p=> p.path.includes(path) && p.isNew);
 
     
         workscope.forEach(item => 
@@ -215,7 +217,7 @@ class KicApp {
 
             if (item.directive==="kic-bind" && !item.element.dataset.kicBindBound)
             {
-                item.needsrefresh = false;
+                item.isNew = false;
                 item.element.addEventListener("input", (event) => {
 
                     const keys = item.path.match(/[^.[\]]+/g); // Extracts both object keys and array indices
@@ -269,7 +271,7 @@ class KicApp {
 
             if (item.directive=== "kic-click" && !item.element.dataset.kicClickBound)
             {
-                item.needsrefresh = false;
+                item.isNew = false;
                 let match = item.path.match(/^(\w+)\((.*?)\)$/);
                 if (match) {
                     let functionName = match[1];  // Function name (e.g., handleDeleteCar)
@@ -420,9 +422,6 @@ class KicApp {
             });
            
         });
-
-
-     
         
     }
 
@@ -590,12 +589,86 @@ class KicApp {
     //     });
     // }
     
-    
-
-    #applyProxyChangesToDOM(path, value) {
-
-        if (!this.#isPrimitive(value))
+    #applyProxyChangesToDOM(path, value) 
+    {
+        if (this.#isPrimitive(value))
         {
+            const kicbind = this.#domDictionary.filter(p=>p.kictype==="binding" && p.path===path && directive==='kic-bind');
+            kicbind.forEach(t=>
+            {
+                if (t.element.type === "checkbox") {
+                    t.element.checked = value;
+                } else if (t.element.type === "radio") {
+                    t.element.checked = t.element.value === value;
+                } else {
+                    t.element.value = value;
+                }                     
+            });
+
+            const kichide = this.#domDictionary.filter(p=>p.kictype==="oneway" && p.path===path && directive==='kic-hide');
+            kichide.forEach(t=>
+            {
+                t.element.style.display = value ? "none" : "";               
+            });
+
+            const kicshow = this.#domDictionary.filter(p=>p.kictype==="oneway" && p.path===path && directive==='kic-show');
+            kicshow.forEach(t=>
+            {
+                t.element.style.display = value ? "" : "none";
+          
+            });
+        }
+        else
+        {
+            const interplations = this.#domDictionary.filter(p=>p.kictype==="interpolation" && p.path===path);
+            interplations.forEach(t=>
+            {
+                  t.node.textContent = t.element.templateMarkUp.replace(/{{(.*?)}}/g, (_, expression) => {
+                    expression = expression.trim();
+
+                    if (expression=== t.path)
+                    {
+                      
+                        //If it's the root
+                        if (expression.toLowerCase()=='kic') {
+                            return JSON.stringify(context);
+                        }
+        
+                        //Index (Allowed as interpolation in kic-foreach)
+                        if (expression.toLowerCase()=='index') 
+                        {
+                            let idx = t.element.getAttribute('kic-index');
+                            let p = t.element.parentElement;
+                            let safecnt=0;
+                            while (!idx && p)
+                            {
+                                safecnt++;
+                                idx = p.getAttribute('kic-index');
+                                p=p.parentElement;
+                                if (safecnt>100)
+                                    break;
+                            }
+                            if (idx)
+                                return idx;
+                        }
+        
+                        if (expression.toLowerCase().startsWith('kic.'))
+                            expression = expression.replace('kic.', '');
+                        
+        
+                        const functionBody = `return ${expression}`;
+        
+                        // Use the Function constructor to evaluate the expression dynamically
+                        let result = new Function(...Object.keys(context), functionBody)(...Object.values(context));
+        
+                        // If the result is an object, convert it to JSON string for better display
+                        return typeof result === "object" ? JSON.stringify(result) : result;
+
+                    }
+                });
+          
+            });
+
             Object.keys(value).forEach(key => {
                 let tempobj = value[key];
                 if (tempobj !== undefined && tempobj !== null) {
@@ -605,39 +678,59 @@ class KicApp {
                         : `${path}.${key}`;
         
                     this.#applyProxyChangesToDOM(newPath, tempobj);
-                    return;
-                    
                 }
             });
+        
+
         }
+    }
 
-        const log = this.#getConsoleLog(2);
-        if (log.active)
-            console.log(log.name, path, value);
+    // #applyProxyChangesToDOM(path, value) 
+    // {
+    //     if (!this.#isPrimitive(value))
+    //     {
+    //         Object.keys(value).forEach(key => {
+    //             let tempobj = value[key];
+    //             if (tempobj !== undefined && tempobj !== null) {
+    //                 // Detect numeric keys (array indices) and format path correctly
+    //                 const newPath = Array.isArray(value) && /^\d+$/.test(key) 
+    //                     ? `${path}[${key}]` 
+    //                     : `${path}.${key}`;
+        
+    //                 this.#applyProxyChangesToDOM(newPath, tempobj);
+    //             }
+    //         });
+    //     }
 
-        this.#appElement.querySelectorAll(`[kic-bind="${path}"]`).forEach(el => 
-        {
-            if (!Array.isArray(value) && ! (typeof value === 'object')) {
-                if (el.type === "checkbox") {
-                    el.checked = value;
-                } else if (el.type === "radio") {
-                    el.checked = el.value === value;
-                } else {
-                    el.value = value;
-                }
-            } 
+    //     const log = this.#getConsoleLog(2);
+    //     if (log.active)
+    //         console.log(log.name, path, value);
+
+
+
+    //     this.#appElement.querySelectorAll(`[kic-bind="${path}"]`).forEach(el => 
+    //     {
+    //         if (!Array.isArray(value) && ! (typeof value === 'object')) {
+    //             if (el.type === "checkbox") {
+    //                 el.checked = value;
+    //             } else if (el.type === "radio") {
+    //                 el.checked = el.value === value;
+    //             } else {
+    //                 el.value = value;
+    //             }
+    //         } 
             
-        });
+    //     });
     
        
-        this.#appElement.querySelectorAll(`[kic-hide="${path}"]`).forEach(el => {
-            el.style.display = value ? "none" : "";
-        });
+    //     this.#appElement.querySelectorAll(`[kic-hide="${path}"]`).forEach(el => {
+    //         el.style.display = value ? "none" : "";
+    //     });
     
-        this.#appElement.querySelectorAll(`[kic-show="${path}"]`).forEach(el => {
-            el.style.display = value ? "" : "none";
-        });
-    }
+    //     this.#appElement.querySelectorAll(`[kic-show="${path}"]`).forEach(el => {
+    //         el.style.display = value ? "" : "none";
+    //     });
+    // }
     
 
         
@@ -645,92 +738,88 @@ class KicApp {
 
     
     
-    #collectInterpolatedElements(element) 
-    {
+    // #collectInterpolatedElements(element) 
+    // {
 
-        // Collect all elements containing interpolation expressions
-        let elements = [];
-        if (!element)
-            elements = this.#appElement.querySelectorAll('*');
-        else
-            elements = element.querySelectorAll('*');
+    //     // Collect all elements containing interpolation expressions
+    //     let elements = [];
+    //     if (!element)
+    //         elements = this.#appElement.querySelectorAll('*');
+    //     else
+    //         elements = element.querySelectorAll('*');
     
-        elements.forEach(el => {
-            if (el.childNodes.length) {
-                el.childNodes.forEach(node => {
-                    if (node.nodeType === Node.TEXT_NODE) {
-                        const expressions = this.#getInterpolationPaths(node.textContent);
+    //     elements.forEach(el => {
+    //         if (el.childNodes.length) {
+    //             el.childNodes.forEach(node => {
+    //                 if (node.nodeType === Node.TEXT_NODE) {
+    //                     const expressions = this.#getInterpolationPaths(node.textContent);
                         
-                        if (expressions.length > 0) {
-                            // Check if the element is already in the list
-                            // console.log("Checking element:", el, "node:", node);
-                            // console.log("Current list:", this.#interpolatedElements);
-                            const isDuplicate = this.#interpolatedElements.some(item => 
-                                item.element === el && item.node === node
-                            );
-                            // console.log("Is duplicate?", isDuplicate);
+    //                     if (expressions.length > 0) {
+    //                         // Check if the element is already in the list
+    //                         // console.log("Checking element:", el, "node:", node);
+    //                         // console.log("Current list:", this.#interpolatedElements);
+    //                         const isDuplicate = this.#interpolatedElements.some(item => 
+    //                             item.element === el && item.node === node
+    //                         );
+    //                         // console.log("Is duplicate?", isDuplicate);
 
-                            //Check if this interpolation was created after the mount of kic
-                            let foreachpath = el.getAttribute('kic-path');
-                            let p = el.parentElement;
-                            let safecnt=0;
-                            while (!foreachpath && p)
-                            {
-                                safecnt++;
-                                foreachpath = p.getAttribute('kic-path');
-                                p=p.parentElement;
-                                if (safecnt>10)
-                                    break;
-                            }
-                            if (!foreachpath)
-                                foreachpath="";
+    //                         //Check if this interpolation was created after the mount of kic
+    //                         let foreachpath = el.getAttribute('kic-path');
+    //                         let p = el.parentElement;
+    //                         let safecnt=0;
+    //                         while (!foreachpath && p)
+    //                         {
+    //                             safecnt++;
+    //                             foreachpath = p.getAttribute('kic-path');
+    //                             p=p.parentElement;
+    //                             if (safecnt>10)
+    //                                 break;
+    //                         }
+    //                         if (!foreachpath)
+    //                             foreachpath="";
     
-                            if (!isDuplicate) {
-                                this.#interpolatedElements.push({
-                                    element: el,
-                                    node,
-                                    originalText: node.textContent,
-                                    expressions,
-                                    path: foreachpath
-                                });
-                            }
-                        }
-                    }
-                });
-            }
-        });
+    //                         if (!isDuplicate) {
+    //                             this.#interpolatedElements.push({
+    //                                 element: el,
+    //                                 node,
+    //                                 originalText: node.textContent,
+    //                                 expressions,
+    //                                 path: foreachpath
+    //                             });
+    //                         }
+    //                     }
+    //                 }
+    //             });
+    //         }
+    //     });
 
-        if (this.#enableInterpolation &&  this.#interpolatedElements.length == 0)
-            this.enableInterpolation=true;
-    }
+    //     if (this.#enableInterpolation &&  this.#interpolatedElements.length == 0)
+    //         this.enableInterpolation=true;
+    // }
     
 
 
-    #interpolateDOM(interPolatedElement) 
-    {
+    // #interpolateDOM(path) 
+    // {
 
-       if (this.#interpolatedElements.length===0)
-            return;
-
-
-       this.#interpolatedElements.forEach(({ element, node, originalText, expressions, path }) => {
+    //    this.#interpolatedElements.forEach(({ element, node, originalText, expressions, path }) => {
             
-        if (!interPolatedElement){
-            const nodetext = this.#updateInterpolations(element, originalText, this.#appDataProxy);
-            node.textContent = nodetext;
-        }
-        else
-        {
-            if (interPolatedElement===element)
-            {
-                const nodetext = this.#updateInterpolations(element, originalText, this.#appDataProxy);
-                node.textContent = nodetext;
-            }
-        }
+    //     if (!interPolatedElement){
+    //         const nodetext = this.#updateInterpolations(element, originalText, this.#appDataProxy);
+    //         node.textContent = nodetext;
+    //     }
+    //     else
+    //     {
+    //         if (interPolatedElement===element)
+    //         {
+    //             const nodetext = this.#updateInterpolations(element, originalText, this.#appDataProxy);
+    //             node.textContent = nodetext;
+    //         }
+    //     }
 
-       });
+    //    });
 
-    }
+    // }
 
     #getValueByPath(path) {
         const keys = path.match(/[^.[\]]+/g);
@@ -765,6 +854,7 @@ class KicApp {
     }
 
     #updateInterpolations(element, str, context = {}) {
+
         return str.replace(/{{(.*?)}}/g, (_, expression) => {
             try 
             {
