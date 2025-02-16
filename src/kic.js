@@ -39,7 +39,7 @@ class KicApp {
         }, this.#appData);
 
        
-        this.#buildDomDictionary(this.#appElement);
+        this.#buildDomDictionary();
         this.#renderTemplates();
         this.#setupBindings();
         this.#applyProxyChangesToDOM();
@@ -130,10 +130,8 @@ class KicApp {
 
 
    
-    #buildDomDictionary(element)
+    #buildDomDictionary(tag = this.#appElement)
     {
-        const tag = element || this.#appElement;
-
         const templateChildren=[];
 
         function collectDescendants(ce) {
@@ -353,39 +351,7 @@ class KicApp {
     
     }
 
-    // #setupTemplates() 
-    // {
-    //     this.#appElement.querySelectorAll("[kic-foreach]").forEach(template => {
-
-    //         const expr = template.getAttribute("kic-foreach"); 
-    //         const parent = template.parentElement;
-    //         const tagname = template.localName;
-    //         const html = this.#cleanWhitespace(template.innerHTML);
-    //         let isValid=true;
-
-    //         if (!expr)
-    //             isValid=false;
-    //         if (!tagname)
-    //             isValid=false;
-    //         if (!html)
-    //             isValid=false;
-    //         if (!parent)
-    //             isValid=false;
-
-    //         const isDuplicate = this.#foreachTemplates.some(item => 
-    //             item.parentElement === parent && item.expression === expr
-    //         );
-
-    //         if (!isDuplicate && isValid)
-    //         {
-    //             let [varName, arrayName] = expr.split(" in ").map(s => s.trim());
-    //             this.#foreachTemplates.push({parentElement: parent, expression:expr, templateTagName: tagname, templateHTML: html, path: arrayName, foreachVarName: varName });
-    //             template.remove();
-    //         }
-            
-    //     });
-    // }
-
+  
     #renderTemplates(operation='init', path='kic', array=this.#appDataProxy) 
     {
 
@@ -399,7 +365,7 @@ class KicApp {
         if (path.toLowerCase()==='kic')
             templates = this.#domDictionary.filter(p=> p.kictype==='template');
         else
-            templates = this.#domDictionary.filter(p=> p.path===path &&  p.kictype==='template');
+            templates = this.#domDictionary.filter(p=> p.path.includes(path) && p.kictype==='template');
 
         templates.forEach(template => {
 
@@ -419,26 +385,34 @@ class KicApp {
            let counter=0;
             if (!isSinglePush)
             {
-                this.#removeFromDomDictionary(template.element);
+                //this.#removeFromDomDictionary(template.element);
                 template.element.innerHTML = ""; // Clear list
             }
             else
             {
                 counter = foreacharray.length-1;
-                foreacharray = foreacharray.arr.slice(-1);
+                foreacharray = foreacharray.slice(-1);
             }
 
         
             foreacharray.forEach(item => {
                 const newtag = document.createElement(template.templateTagName);
-                newtag.innerHTML = template.templateMarkup;
+                let interpolationpaths = this.#getInterpolationPaths(template.templateMarkup);
+                if (interpolationpaths.length>0)
+                {
+                    let regex = new RegExp(`{{([^}]*)\\b${varname}\\b([^}]*)}}`, "g");
+                    newtag.innerHTML = template.templateMarkup.replace(regex, (match, before, after) => {return `{{${before}${datapath}[${counter}]${after}}}`});
+                }
+                else
+                {
+                    newtag.innerHTML = template.templateMarkup;
+                }
+              
                 newtag.setAttribute("kic-varname", varname);
                 newtag.setAttribute("kic-path", `${datapath}[${counter}]`);
                 newtag.setAttribute("kic-index", counter);
                 newtag.dataset.kicIndex = counter;
                 template.element.appendChild(newtag);
-
-                this.#buildDomDictionary(newtag);
                
                 //Add references to click handlers
                 newtag.querySelectorAll("[kic-click]").forEach(el => 
@@ -446,7 +420,6 @@ class KicApp {
                     el.setAttribute("kic-varname", varname);
                     el.setAttribute("kic-path", `${datapath}[${counter}]`);
                     el.setAttribute("kic-index", counter);
-                    this.#buildDomDictionary(el);
                 });
 
                 //Add references to input bindings
@@ -461,184 +434,18 @@ class KicApp {
 
                     let bindingpath = attrib.replace(varname,`${datapath}[${counter}]`);
                     el.setAttribute("kic-bind", bindingpath);
-                    this.#buildDomDictionary(el);
 
                 });
+
+                this.#buildDomDictionary(newtag);
 
                 counter++;
 
             });
            
-        });
-        
+        });    
     }
 
-
-    // #bindForEach() {
-
-    //     let updateInterpolations = false;
-    //     let updateInputBindings = false;
-    //     let arraynames = [];
-    //     this.#foreachTemplates.forEach(template => {
-
-
-    //         let [itemName, arrayName] = template.expression.split(" in ").map(s => s.trim());
-    //         template.parentElement.innerHTML = ""; // Clear list
-    //         const foreachArray = this.#getValueByPath(arrayName);
-    //         let counter=0;
-    //         foreachArray.forEach(item => {
-    //             const newtag = document.createElement(template.templateTagName);
-    //             let exprlist = this.#getInterpolationPaths(template.templateHTML);
-    //             if (exprlist.length>0 && this.#enableInterplation)
-    //             {
-    //                 /*
-
-    //                     Regex Breakdown
-    //                     {{([^}]*) → Captures everything before itemName inside {{ ... }}
-
-    //                     \\b${itemName}\\b → Finds itemName as a whole word
-
-    //                     ([^}]*)}} → Captures everything after itemName inside {{ ... }}
-
-    //                     Final Match: {{ before itemName after }}
-                        
-    //                     Replace Logic
-    //                     Keeps before and after unchanged
-    //                     Replaces itemName with arrayName[index]
-
-    //                 */
-    //                 let regex = new RegExp(`{{([^}]*)\\b${itemName}\\b([^}]*)}}`, "g");
-    //                 newtag.innerHTML = template.templateHTML.replace(regex, (match, before, after) => {
-    //                     return `{{${before}${arrayName}[${counter}]${after}}}`;
-    //                 });
-                    
-    //                 updateInterpolations=true;
-                   
-    //             }
-    //             else{
-    //                  newtag.innerHTML = template.templateHTML;
-    //             }
-
-    //             arraynames.push(arrayName);
-
-    //             newtag.setAttribute("kic-varname", itemName);
-    //             newtag.setAttribute("kic-path", `${arrayName}[${counter}]`);
-    //             newtag.setAttribute("kic-index", counter);
-    //             newtag.dataset.kicIndex = counter;
-    //             template.parentElement.appendChild(newtag);
-              
-
-    //             //Add references to click andlers
-    //             newtag.querySelectorAll("[kic-click]").forEach(el => 
-    //             {
-    //                 el.setAttribute("kic-varname", itemName);
-    //                 el.setAttribute("kic-path", `${arrayName}[${counter}]`);
-    //                 el.setAttribute("kic-index", counter);
-    //             });
-
-    //              //Add references to input bindings
-    //              newtag.querySelectorAll("[kic-bind]").forEach(el => 
-    //             {
-    //                     updateInputBindings=true;
-    //                     el.setAttribute("kic-varname", itemName);
-    //                     el.setAttribute("kic-path", `${arrayName}[${counter}]`);
-    //                     el.setAttribute("kic-index", counter);
-    //                     let attrib = el.getAttribute("kic-bind");
-    //                     if (!attrib.includes(itemName))
-    //                         console.warn(`Error The input binding ${attrib} used in an element under kic-foreach does not match the kic-foreach expression, should include '${itemName}'`);
-
-    //                     el.setAttribute("kic-bind", attrib.replace(itemName,`${arrayName}[${counter}]`));
-    //                 });
-
-    //             counter++;
-
-                
-    //         });
-           
-    //     });
-
-    //     if (updateInputBindings)
-    //     {
-    //             arraynames.forEach(name=>{
-    //                 this.#inputBindings = this.#inputBindings.filter(p=> !p.path.includes(name));
-    //             });
-             
-    //             this.#collectInputBindings();
-    //     }
-
-    //     if (updateInterpolations && this.#enableInterplation)
-    //     {
-    //         arraynames.forEach(name=>{
-    //             this.#interpolatedElements = this.#interpolatedElements.filter(p=> !p.path.includes(name));
-    //         });
-
-    //         this.#collectInterpolatedElements();
-    //     }
-    // }
-
-   
-
-    // #bindClickEvents(element) 
-    // {
-    //     if (!element)
-    //         element= this.#appElement;
-
-    //     element.querySelectorAll("[kic-click]").forEach(el => {
-    //         const expression = el.getAttribute("kic-click").trim();
-
-            
-    //         // Check if the event is already bound
-    //         if (el.dataset.kicClickBound) return; 
-
-    //         let match = expression.match(/^(\w+)\((.*?)\)$/);
-    //         if (match) {
-    //             let functionName = match[1];  // Function name (e.g., handleDeleteCar)
-    //             let argExpression = match[2]; // Arguments inside parentheses (e.g., car)
-
-    //             el.addEventListener("click", (event) => {
-    //                 // Resolve arguments dynamically
-    //                 let arglist = argExpression.split(",").map(arg => arg.trim()); // Split multiple arguments
-    //                 let args = arglist.map(arg => {
-    //                     if (arg === "event") 
-    //                         return event; // Allow `event` as a parameter
-
-    //                     const path = event.target.getAttribute("kic-path"); 
-    //                     if (path)
-    //                     {
-    //                         const varname = event.target.getAttribute("kic-varname"); 
-    //                         if (arg!=varname)
-    //                         {
-    //                               console.warn(`Error The variable ${arg} used in ${functionName} does not match the kic-foreach expression, should be '${varname}'`);
-    //                         }
-    //                         return this.#getValueByPath(path);
-    //                     }
-    //                     else
-    //                        return this.#getValueByPath(arg);
-
-    //                 });
-                    
-    //                 // Call the function from the handlers object
-    //                 if (this.#eventHandlers[functionName]) {
-    //                     this.#eventHandlers[functionName].apply(this, args);
-    //                 } else {
-    //                     console.warn(`Handler function '${functionName}' not found.`);
-    //                 }
-    //             });
-
-    //              // Mark the element as bound
-    //              el.dataset.kicClickBound = "true";  
-
-    //         } else {
-    //             console.warn(`Invalid kic-click expression: ${expression}`);
-    //         }
-        
-    
-           
-    //     });
-    // }
-
-   
-    
     #applyProxyChangesToDOM(path='kic', value=this.#appDataProxy) 
     {
       
@@ -652,8 +459,13 @@ class KicApp {
                 let content= t.templateMarkup;
                 t.expressions.forEach(expr=> 
                 {
-                
-                    let exprvalue = instance.#getValueByPath(expr);
+                    let exprvalue = null;
+
+                    if (expr.toLowerCase()=== 'index')
+                        exprvalue = instance.#getClosestAttribute(t.element, 'kic-index');
+                    else
+                        exprvalue = instance.#getValueByPath(expr);
+
                     if (!exprvalue)
                         return;
 
@@ -723,152 +535,7 @@ class KicApp {
 
     }
 
-    // #applyProxyChangesToDOM(path, value) 
-    // {
-    //     if (!this.#isPrimitive(value))
-    //     {
-    //         Object.keys(value).forEach(key => {
-    //             let tempobj = value[key];
-    //             if (tempobj !== undefined && tempobj !== null) {
-    //                 // Detect numeric keys (array indices) and format path correctly
-    //                 const newPath = Array.isArray(value) && /^\d+$/.test(key) 
-    //                     ? `${path}[${key}]` 
-    //                     : `${path}.${key}`;
-        
-    //                 this.#applyProxyChangesToDOM(newPath, tempobj);
-    //             }
-    //         });
-    //     }
-
-    //     const log = this.#getConsoleLog(2);
-    //     if (log.active)
-    //         console.log(log.name, path, value);
-
-
-
-    //     this.#appElement.querySelectorAll(`[kic-bind="${path}"]`).forEach(el => 
-    //     {
-    //         if (!Array.isArray(value) && ! (typeof value === 'object')) {
-    //             if (el.type === "checkbox") {
-    //                 el.checked = value;
-    //             } else if (el.type === "radio") {
-    //                 el.checked = el.value === value;
-    //             } else {
-    //                 el.value = value;
-    //             }
-    //         } 
-            
-    //     });
-    
-       
-    //     this.#appElement.querySelectorAll(`[kic-hide="${path}"]`).forEach(el => {
-    //         el.style.display = value ? "none" : "";
-    //     });
-    
-    //     this.#appElement.querySelectorAll(`[kic-show="${path}"]`).forEach(el => {
-    //         el.style.display = value ? "" : "none";
-    //     });
-    // }
-    
-
-        
-    
-
-    
-    
-    // #collectInterpolatedElements(element) 
-    // {
-
-    //     // Collect all elements containing interpolation expressions
-    //     let elements = [];
-    //     if (!element)
-    //         elements = this.#appElement.querySelectorAll('*');
-    //     else
-    //         elements = element.querySelectorAll('*');
-    
-    //     elements.forEach(el => {
-    //         if (el.childNodes.length) {
-    //             el.childNodes.forEach(node => {
-    //                 if (node.nodeType === Node.TEXT_NODE) {
-    //                     const expressions = this.#getInterpolationPaths(node.textContent);
-                        
-    //                     if (expressions.length > 0) {
-    //                         // Check if the element is already in the list
-    //                         // console.log("Checking element:", el, "node:", node);
-    //                         // console.log("Current list:", this.#interpolatedElements);
-    //                         const isDuplicate = this.#interpolatedElements.some(item => 
-    //                             item.element === el && item.node === node
-    //                         );
-    //                         // console.log("Is duplicate?", isDuplicate);
-
-    //                         //Check if this interpolation was created after the mount of kic
-    //                         let foreachpath = el.getAttribute('kic-path');
-    //                         let p = el.parentElement;
-    //                         let safecnt=0;
-    //                         while (!foreachpath && p)
-    //                         {
-    //                             safecnt++;
-    //                             foreachpath = p.getAttribute('kic-path');
-    //                             p=p.parentElement;
-    //                             if (safecnt>10)
-    //                                 break;
-    //                         }
-    //                         if (!foreachpath)
-    //                             foreachpath="";
-    
-    //                         if (!isDuplicate) {
-    //                             this.#interpolatedElements.push({
-    //                                 element: el,
-    //                                 node,
-    //                                 originalText: node.textContent,
-    //                                 expressions,
-    //                                 path: foreachpath
-    //                             });
-    //                         }
-    //                     }
-    //                 }
-    //             });
-    //         }
-    //     });
-
-    //     if (this.#enableInterpolation &&  this.#interpolatedElements.length == 0)
-    //         this.enableInterpolation=true;
-    // }
-    
-
-
-    // #interpolateDOM(path) 
-    // {
-
-    //    this.#interpolatedElements.forEach(({ element, node, originalText, expressions, path }) => {
-            
-    //     if (!interPolatedElement){
-    //         const nodetext = this.#updateInterpolations(element, originalText, this.#appDataProxy);
-    //         node.textContent = nodetext;
-    //     }
-    //     else
-    //     {
-    //         if (interPolatedElement===element)
-    //         {
-    //             const nodetext = this.#updateInterpolations(element, originalText, this.#appDataProxy);
-    //             node.textContent = nodetext;
-    //         }
-    //     }
-
-    //    });
-
-    // }
-
-    // #getValueByPath(path) {
-    //     const keys = path.match(/[^.[\]]+/g);
-    //     let target = this.#appDataProxy;
-    //     keys.forEach(key => {
-    //         if (key.toLowerCase() !== 'kic') {
-    //             if (target) target = target[key];
-    //         }
-    //     });
-    //     return target;
-    // }
+   
 
     #getValueByPath(path) {
         const keys = path.match(/[^.[\]]+/g);
@@ -884,14 +551,6 @@ class KicApp {
         return target;
     }
 
-
-    // #cleanWhitespace(html) 
-    // {
-    //     return html
-    //         .replace(/>\s+</g, '><')  // Remove spaces between tags
-    //         .replace(/(\S)\s{2,}(\S)/g, '$1 $2'); // Reduce multiple spaces to one inside text nodes
-    // }
-
     //Get interpolation data paths from a string found in the dom
     #getInterpolationPaths(str) {
         const regex = /{{(.*?)}}/g;
@@ -905,56 +564,7 @@ class KicApp {
         return matches;
     }
 
-    // #updateInterpolations(element, str, context = {}) {
 
-    //     return str.replace(/{{(.*?)}}/g, (_, expression) => {
-    //         try 
-    //         {
-    //             expression = expression.trim();
-    
-    //             //If it's the root
-    //             if (expression.toLowerCase()=='kic') {
-    //                 return JSON.stringify(context);
-    //             }
-
-    //             //Index (Allowed as interpolation in kic-foreach)
-    //             if (expression.toLowerCase()=='index' && element) 
-    //             {
-    //                 let idx = element.getAttribute('kic-index');
-    //                 let p = element.parentElement;
-    //                 let safecnt=0;
-    //                 while (!idx && p)
-    //                 {
-    //                     safecnt++;
-    //                     idx = p.getAttribute('kic-index');
-    //                     p=p.parentElement;
-    //                     if (safecnt>100)
-    //                         break;
-    //                 }
-    //                 if (idx)
-    //                     return idx;
-    //             }
-
-    //             if (expression.toLowerCase().startsWith('kic.'))
-    //                 expression = expression.replace('kic.', '');
-                
-
-    //             const functionBody = `return ${expression}`;
-
-    //             // Use the Function constructor to evaluate the expression dynamically
-    //             let result = new Function(...Object.keys(context), functionBody)(...Object.values(context));
-
-    //             // If the result is an object, convert it to JSON string for better display
-    //             return typeof result === "object" ? JSON.stringify(result) : result;
-
-    //         } catch (error) {
-    //             expression='kic.'+expression;
-    //             return `{{${expression}}}`; // Keep the original interpolation if an error occurs
-    //         }
-    //     });
-    // }
-
- 
     #isPrimitive(value)
     {
         let result = value !== null && typeof value !== "object" && typeof value !== "function";
