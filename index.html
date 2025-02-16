@@ -30,7 +30,7 @@
 
 
         
-    <h1>KIC</h1>
+    <h1>KIC.js (Keep It Clean)</h1>
 
     <div id="app">
         <div class="container">
@@ -104,31 +104,6 @@
             var t = this.getData();
             t.edit = !t.edit;
         });
-
-        // var t = this.getData();
-        //     const indexToRemove = t.model.cars.findIndex(car => car.kicId === data.kicId);
-        //     if (indexToRemove !== -1) {
-        //         t.model.cars.splice(indexToRemove, 1);  // Remove the car at index found
-        //     }
-        // kicapp.addHandler("sayHello", function(event) 
-        // {
-        //     alert('Hello !');
-        // });
-
-        // //Regular JS onClick Handler
-        // function handleShowHide()
-        // {
-        //     var t = kicapp.getData();
-        //     t.settings.edit = !t.settings.edit;
-        // }
-
-        // //Regular JS onClick Handler
-        // function handleAddCar()
-        // {
-        //     var car = {brand:"Audi", serial:"v8888"};
-        //     var t = kicapp.getData();
-        //     t.model.cars.push(car);
-        // }
 
         kicapp.mount(appElement);
 
