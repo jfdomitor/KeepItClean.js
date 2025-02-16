@@ -14,6 +14,7 @@ class KicApp {
     #eventHandlers = {};
     #consoleLogs = [];
     #domDictionary = []; //Reference dom from paths
+    #domDictionaryId=0;
 
     constructor(data, enableInternalId) {
         this.#appData = data;
@@ -130,7 +131,7 @@ class KicApp {
 
 
    
-    #buildDomDictionary(tag = this.#appElement)
+    #buildDomDictionary(tag = this.#appElement, templateId=-1)
     {
         const templateChildren=[];
 
@@ -168,25 +169,27 @@ class KicApp {
                         .replace(/>\s+</g, '><')  // Remove spaces between tags
                         .replace(/(\S)\s{2,}(\S)/g, '$1 $2'); // Reduce multiple spaces to one inside text nodes
 
-                    const odo = this.#createDomDictionaryObject(el.parentElement, null, attr.name, attr.value, "template", true, templateHtml, el.localName, null);
+                    const odo = this.#createDomDictionaryObject(el.parentElement, null, attr.name, attr.value, "template", true, templateHtml, el.localName, -1, null);
                     this.#domDictionary.push(odo);
                     el.remove();
                 }
 
                 if (['kic-hide', 'kic-show'].includes(attr.name))
                 {
-                    const odo = this.#createDomDictionaryObject(el,null,attr.name,attr.value, "oneway", true,"","",null);
+                    const odo = this.#createDomDictionaryObject(el,null,attr.name,attr.value, "oneway", true,"","",templateId,null);
                     this.#domDictionary.push(odo);
                 }
 
                 if (['kic-bind'].includes(attr.name))
                 {
-                    const odo = this.#createDomDictionaryObject(el,null,attr.name,attr.value, "binding", true,"","",null);
+                    const odo = this.#createDomDictionaryObject(el,null,attr.name,attr.value, "binding", true,"","",templateId,null);
                     this.#domDictionary.push(odo);
                 }
 
                 if (['kic-click'].includes(attr.name)){
-                    const odo = this.#createDomDictionaryObject(el,null,attr.name,attr.value, "handler", true,"","",null);
+                    let expressions=[];
+                    expressions.push(attr.value);
+                    const odo = this.#createDomDictionaryObject(el,null,attr.name,"", "handler", true,"","",templateId, expressions);
                     this.#domDictionary.push(odo);
                 }
             });
@@ -200,7 +203,7 @@ class KicApp {
                 if (walker.currentNode.nodeValue.includes("{{") && walker.currentNode.nodeValue.includes("}}"))
                 {
                     let paths = this.#getInterpolationPaths(walker.currentNode.nodeValue);
-                    const odo = this.#createDomDictionaryObject(walker.currentNode.parentElement,walker.currentNode,"interpolation","", "interpolation", true,walker.currentNode.nodeValue,"",paths);
+                    const odo = this.#createDomDictionaryObject(walker.currentNode.parentElement,walker.currentNode,"interpolation","", "interpolation", true,walker.currentNode.nodeValue,"",templateId, paths);
                     this.#domDictionary.push(odo);
                 }
             }
@@ -215,14 +218,17 @@ class KicApp {
         }
     }
 
-    #removeFromDomDictionary(element) 
+    #removeFromDomDictionaryById(id) 
     {
-        this.#domDictionary = this.#domDictionary.filter(item => 
-            item.element !== element && !element.contains(item.element)
-        );
+        this.#domDictionary = this.#domDictionary.filter(item => item.id !== id);
     }
 
-    #createDomDictionaryObject(element, node, directive, path, kictype, isnew, templateMarkup, templateTagName, expressions)
+    #removeTemplateChildrenFromDomDictionary(templatedId) 
+    {
+        this.#domDictionary = this.#domDictionary.filter(item => item.templateId !== templatedId); 
+    }
+
+    #createDomDictionaryObject(element, node, directive, path, kicType, isnew, templateMarkup, templateTagName, templateId, expressions)
     {
         if (!expressions)
         {
@@ -230,7 +236,9 @@ class KicApp {
             expressions.push(path);
         }
 
-        return {element: element, node:node, directive: directive,  path:path, kictype: kictype, isnew: isnew, templateMarkup: templateMarkup, templateTagName: templateTagName, expressions: expressions  };
+        let id = this.#domDictionaryId++;
+
+        return {id: id, templateId: templateId, element: element, node:node, directive: directive,  path:path, kictype: kicType, isnew: isnew, templateMarkup: templateMarkup, templateTagName: templateTagName, expressions: expressions  };
     }
   
 
@@ -239,9 +247,9 @@ class KicApp {
 
         let workscope = [];
         if (path.toLowerCase()=='kic')
-            workscope = this.#domDictionary;
+            workscope = this.#domDictionary.filter(p=> p.isnew && ['binding', 'handler'].includes(p.kictype));
         else
-            workscope= this.#domDictionary.filter(p=> p.path.includes(path) && p.isnew);
+            workscope= this.#domDictionary.filter(p=> p.isnew && ((p.path.includes(path) && p.kictype==='binding') || p.kictype==='handler'));
 
     
         workscope.forEach(item => 
@@ -303,8 +311,12 @@ class KicApp {
 
             if (item.directive=== "kic-click" && !item.element.dataset.kicClickBound)
             {
+                if (!item.expressions)
+                    return;
+
                 item.isnew = false;
-                let match = item.path.match(/^(\w+)\((.*?)\)$/);
+                let handlername = item.expressions[0];
+                let match = handlername.match(/^(\w+)\((.*?)\)$/);
                 if (match) {
                     let functionName = match[1];  // Function name (e.g., handleDeleteCar)
                     let argExpression = match[2]; // Arguments inside parentheses (e.g., car)
@@ -327,7 +339,7 @@ class KicApp {
                                 return this.#getValueByPath(path);
                             }
                             else
-                            return this.#getValueByPath(arg);
+                                return this.#getValueByPath(arg);
 
                         });
                         
@@ -343,7 +355,7 @@ class KicApp {
                     item.element.dataset.kicClickBound = "true";  
 
                 } else {
-                    console.warn(`Invalid kic-click expression: ${expression}`);
+                    console.warn(`Invalid kic-click expression: ${handlername}`);
                 }
             }
 
@@ -385,7 +397,7 @@ class KicApp {
            let counter=0;
             if (!isSinglePush)
             {
-                //this.#removeFromDomDictionary(template.element);
+                this.#removeTemplateChildrenFromDomDictionary(template.id);
                 template.element.innerHTML = ""; // Clear list
             }
             else
@@ -435,9 +447,11 @@ class KicApp {
                     let bindingpath = attrib.replace(varname,`${datapath}[${counter}]`);
                     el.setAttribute("kic-bind", bindingpath);
 
+
+
                 });
 
-                this.#buildDomDictionary(newtag);
+                this.#buildDomDictionary(newtag, template.id);
 
                 counter++;
 
@@ -459,6 +473,15 @@ class KicApp {
                 let content= t.templateMarkup;
                 t.expressions.forEach(expr=> 
                 {
+                    //Just to speed up
+                    //If primitive (path), example : kic.model.user.firstname
+                    //Only interpolate kic, kic.model, kic.model.user, kic.model.user.firstname
+                    if (instance.#isPrimitive(value))
+                    {
+                        if (!path.includes(expr))
+                            return;
+                    }
+
                     let exprvalue = null;
 
                     if (expr.toLowerCase()=== 'index')
