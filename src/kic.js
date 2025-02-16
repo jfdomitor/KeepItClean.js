@@ -406,7 +406,8 @@ class KicApp {
                 foreacharray = foreacharray.slice(-1);
             }
 
-        
+            const fragment = document.createDocumentFragment();
+
             foreacharray.forEach(item => {
                 const newtag = document.createElement(template.templateTagName);
                 let interpolationpaths = this.#getInterpolationPaths(template.templateMarkup);
@@ -424,7 +425,7 @@ class KicApp {
                 newtag.setAttribute("kic-path", `${datapath}[${counter}]`);
                 newtag.setAttribute("kic-index", counter);
                 newtag.dataset.kicIndex = counter;
-                template.element.appendChild(newtag);
+                fragment.appendChild(newtag);
                
                 //Add references to click handlers
                 newtag.querySelectorAll("[kic-click]").forEach(el => 
@@ -456,6 +457,9 @@ class KicApp {
                 counter++;
 
             });
+
+            if (fragment.childElementCount>0)
+                template.element.appendChild(fragment);
            
         });    
     }

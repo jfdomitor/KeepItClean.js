@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>KIC Examples</title>
+    <title>State Punk Example</title>
     <style>
         body { font-family: Arial, sans-serif; margin: 20px; padding: 20px; }
     </style>
 </head>
 <body>
 
-    <!-- npx live-server --port=5500 -->
+
     <div id="app">
 
         <label>
@@ -91,9 +91,9 @@
         var dataset = { settings:{ edit:true }, model:{ fname: "Johnny", lname: "Andersson", cars:[{brand:"Volvo", serial:"v1234"}, {brand:"Ford", serial:"f2345"}]}};
         var appElement = document.getElementById("app");
         var kicapp = getKICApp(dataset, true);
-        kicapp.enableConsoleLog(1, true);
-        kicapp.enableConsoleLog(4, true);
-        //kicapp.enableInterpolation(true);
+        //kicapp.enableConsoleLog(1, true);
+        //kicapp.enableConsoleLog(4, true);
+        kicapp.enableInterpolation(false);
         kicapp.addHandler("handleDeleteCar", function(event, data) 
         {
             var t = this.getData();
@@ -128,12 +128,10 @@
 
         // var t = kicapp.getData();
         // let temparr = [];
-        // for(i=0; i<3; i++){
+        // for(i=0; i<1000; i++){
         //     var car = {brand:"Mercedes", serial:"99999"};
-        //     temparr.push(car);
+        //     t.model.cars.push(car);
         // }
-
-        // t.model.cars= temparr;
 
    
         
