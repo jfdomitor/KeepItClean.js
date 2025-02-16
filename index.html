@@ -36,7 +36,7 @@
         <div class="container">
        
         <div class="box">   
-                    <p>{{kic.whatIsKic}}</p>
+                    <h4>{{kic.whatIsKic}}</h4>
                     <p><b>Features</b></p>
                     <div data-isTemplateContainer="true">
                         <ul kic-foreach="feature in kic.features">
@@ -84,14 +84,14 @@
         dataset.whatIsKic = "KIC is a small reactive java script, it can be use to list ramones shows and hopefully other things :)";
         dataset.features = [];
         dataset.features.push('Using proxies to react on data changes');
-        dataset.features.push('Super light: Less than 50Kb unminified');
-        dataset.features.push('Fast');
+        dataset.features.push('Super light, less than 50Kb unminified');
+        dataset.features.push('Fast (sometimes :)');
         dataset.features.push('Directive: kic-bind - bind your inputs to your model');
         dataset.features.push('Directive: kic-click - run functions');
         dataset.features.push('Directive: kic-foreach - a template directive to create new html (like this list) based on an array in your model');
         dataset.features.push('Directive: kic-hide - hide an html element based on a boolean value in your model');
         dataset.features.push('Directive: kic-show - show an html element based on a boolean value in your model');
-        dataset.features.push('Interpolation');
+        dataset.features.push('Interpolation, example: {{kic.model.users[5].firstname}}');
         dataset.edit = false;
         var appElement = document.getElementById("app");
         var kicapp = getKICApp(dataset, true);
