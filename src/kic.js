@@ -494,7 +494,7 @@ class KicApp {
                         exprvalue = instance.#getValueByPath(expr);
 
                     if (!exprvalue)
-                        return;
+                        exprvalue ="";
 
                     if (typeof exprvalue === "object") 
                         exprvalue = JSON.stringify(exprvalue)
@@ -521,6 +521,9 @@ class KicApp {
                     let boundvalue = value;
                     if (kicbind.length> 1 || !instance.#isPrimitive(boundvalue))
                         boundvalue = instance.#getValueByPath(t.path);
+
+                    if (!boundvalue)
+                        boundvalue="";
 
                     if (t.element.type === "checkbox") {
                         t.element.checked = boundvalue;
