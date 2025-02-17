@@ -3,12 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>State Punk Example</title>
+    <title>barea.js</title>
     <style>
         body { font-family: Arial, sans-serif; margin: 20px; padding: 20px; }
         .container {
                 display: flex; /* Enables flexbox */
                 gap: 10px; /* Adds space between divs */
+                font-size: 18px;
             }
             .box {
                 width: 30%; /* Each div takes half the width */
@@ -68,43 +69,30 @@
                 outline: none;
                 display: inline-block;
             }
-
-            /* Hover Effect */
-            .beautiful-btn:hover {
-                background: linear-gradient(135deg, #5a7ef5, #955de1);
-                box-shadow: 0px 6px 15px rgba(0, 0, 0, 0.3);
-                transform: translateY(-2px);
-            }
-
-            /* Active (Click) Effect */
-            .beautiful-btn:active {
-                transform: translateY(2px);
-                box-shadow: 0px 2px 5px rgba(0, 0, 0, 0.2);
-            }
     </style>
 </head>
 <body>
 
 
         
-    <h1>KIC.js (Keep It Clean)</h1>
+    <h1>barea.js (Basic Reactivity)</h1>
 
     <div id="app">
         <div class="container">
        
-        <div class="box">   
-                    <h4>{{kic.whatIsKic}}</h4>
+            <div class="box">   
+                    <p>{{root.description}}</p>
                     <p><b>Features</b></p>
                     <div data-isTemplateContainer="true">
-                        <ul kic-foreach="feature in kic.features">
-                            <li>{{feature}}</li>
+                        <ul ba-foreach="feature in root.features">
+                            <li><b>{{feature}}</b></li>
                         </ul>
                     </div>
                 </div>
 
                 <div class="box2">
-                    <h1>{{kic.model.description}} <b>(kic-foreach)</b></h1>
-                    <button class="beautiful-btn" kic-click="editHandler(event, show)">Edit Notes <b>(kic-hide, kic-show)</b></button>
+                    <h1>{{root.model.description}}</h1>
+                    <button class="beautiful-btn" ba-click="editHandler(event, show)">Edit Notes</button>
                     <br />
                     <br />
                     <table>
@@ -112,21 +100,21 @@
                             <tr>
                                 <td width="5%"><b>Index</b></td>
                                 <td width="20%"><b>Date</b></td>
-                                <td width="20%"><span kic-hide="kic.edit"><b>Note</b></span><span kic-show="kic.edit"><b>Note (kic-bind)</b></span></td>
+                                <td width="20%"><span ba-hide="root.edit"><b>Note</b></span><span ba-show="root.edit"><b>Note (ba-bind)</b></span></td>
                                 <td width="20%"><b>Rate</b></td>
                                 <td></td>
                             </tr>
                         </thead>
                         <tbody>
-                            <tr kic-foreach="show in kic.model.shows">
+                            <tr ba-foreach="show in root.model.shows">
                                 <td>{{Index}}</td>
                                 <td>{{show.Date}}</td>
                                 <td>
-                                    <span kic-hide="kic.edit">{{show.Note}}</span>
-                                    <span kic-show="kic.edit"><input type="text" kic-bind="show.Note" /></span>
+                                    <span ba-hide="root.edit">{{show.Note}}</span>
+                                    <span ba-show="root.edit"><input type="text" ba-bind="show.Note" /></span>
                                 </td>
                                 <td>
-                                    <div class="star-rating" kic-bind="show.Rating" kic-bind-handler="rateHandler(verb, element, data)">
+                                    <div class="star-rating" ba-bind="show.Rating" ba-bind-handler="rateHandler(verb, element, data)">
                                         <input type="checkbox" id="star1" name="rating" value="1" >
                                         <label for="star1"></label>
                                         <input type="checkbox" id="star2" name="rating" value="2" >
@@ -143,41 +131,41 @@
                             </tr>
                         </tbody>
                     </table>
-                </div>
             </div>
-
+        </div>
     </div>
        
-    <script src="./src/kic.js"></script>
+    <script src="./src/barea.js"></script>
     <script>
         var dataset = { model: { description: "List of ramones shows", "shows":[]}};
         dataset.model.shows = getRamonesShows();
-        dataset.whatIsKic = "KIC is a small reactive java script, it can be use to list ramones shows and hopefully other things :)";
+        dataset.description = "barea.js (Basic Reactivity) is a small reactive java script, it can be use to list ramones shows and hopefully other things :)";
         dataset.features = [];
-        dataset.features.push('Using proxies to react on data changes');
+        dataset.features.push('Using proxies to react on data changes, like vue3');
         dataset.features.push('Super light, less than 50Kb unminified');
         dataset.features.push('Fast (sometimes :)');
-        dataset.features.push('Directive: kic-bind - bind your inputs to your model');
-        dataset.features.push('Directive: kic-click - run functions');
-        dataset.features.push('Directive: kic-foreach - a template directive to create new html (like this list) based on an array in your model');
-        dataset.features.push('Directive: kic-hide - hide an html element based on a boolean value in your model');
-        dataset.features.push('Directive: kic-show - show an html element based on a boolean value in your model');
-        dataset.features.push('Interpolation, example: {{kic.model.users[5].firstname}}');
+        dataset.features.push('Directive: ba-bind: Bind ui controls to your model');
+        dataset.features.push('Directive: ba-bind-handler: Override binding logic for complex ui controls');
+        dataset.features.push('Directive: ba-click: Run functions');
+        dataset.features.push('Directive: ba-foreach: A template directive to create new html based on an array in your model');
+        dataset.features.push('Directive: ba-hide: Hide an html element based on a boolean value in your model');
+        dataset.features.push('Directive: ba-show: Show an html element based on a boolean value in your model');
+        dataset.features.push('Interpolation, example: {{root.model.users[5].firstname}}');
         dataset.edit = false;
         var appElement = document.getElementById("app");
-        var kicapp = getKICApp(dataset, true);
+        var bareaapp = getApp(dataset, true);
 
-        //kicapp.enableConsoleLog(1, true);
-        //kicapp.enableConsoleLog(4, true);
-        //kicapp.enableInterpolation(false);
-        kicapp.addHandler("editHandler", function(event, data) 
+        //bareaapp.enableConsoleLog(1, true);
+        //bareaapp.enableConsoleLog(4, true);
+        //bareaapp.enableInterpolation(false);
+        bareaapp.addHandler("editHandler", function(event, data) 
         {
             var t = this.getData();
             t.edit = !t.edit;
         });
 
         //Custom binding handler for complex controls
-        kicapp.addHandler("rateHandler", function(verb, element, data) 
+        bareaapp.addHandler("rateHandler", function(verb, element, data) 
         {
            if (verb === 'SET_DATA')
            {
@@ -192,7 +180,7 @@
            }
            if (verb === 'SET_UI')
            {
-                //let path = element.getAttribute('kic-path');
+                //let path = element.getAttribute('ba-path');
                 //let data = this.getPathData(path);
                 let checkboxes = element.querySelectorAll('input[type="checkbox"]');
                 let index = 1;
@@ -206,7 +194,7 @@
            }
         });
 
-        kicapp.mount(appElement);
+        bareaapp.mount(appElement);
 
 
    

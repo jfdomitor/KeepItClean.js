@@ -1,12 +1,21 @@
-
-function getKICApp(data, enableInternalId){
-    return new KicApp(data, enableInternalId);
+/**
+ * barea.js
+ * 
+ * Author: Johan Filipsson
+ * Version: 1.0.0
+ * License: MIT
+ * Description: A lightweight and reactive JavaScript library for modern web applications.
+ * 
+ * Copyright (c) 2025 Johan Filipsson
+ */
+function getApp(data, enableInternalId){
+    return new BareaApp(data, enableInternalId);
 }
 
-class KicApp {
+class BareaApp {
 
-    #kicId=0;
-    #enableKicId = false;
+    #bareaId=0;
+    #enableBareaId = false;
     #enableInterpolation = true;
     #appElement; 
     #appData; 
@@ -18,7 +27,7 @@ class KicApp {
 
     constructor(data, enableInternalId) {
         this.#appData = data;
-        this.#enableKicId=enableInternalId;
+        this.#enableBareaId=enableInternalId;
         this.#setConsoleLogs();
     }
 
@@ -45,8 +54,8 @@ class KicApp {
         this.#setupBindings();
         this.#applyProxyChangesToDOM();
 
-        if (this.#enableKicId && ! this.#appDataProxy.hasOwnProperty('kicId')) 
-            this.#appDataProxy.kicId = ++this.#kicId;  // Assign a new unique ID
+        if (this.#enableBareaId && ! this.#appDataProxy.hasOwnProperty('bareaId')) 
+            this.#appDataProxy.bareaId = ++this.#bareaId;  // Assign a new unique ID
    
     }
 
@@ -75,7 +84,7 @@ class KicApp {
     
         // Loop with for (faster than forEach)
         for (let i = 0; i < keys.length; i++) {
-            if (i === 0 && keys[i].toLowerCase() === 'kic') continue; // Skip 'kic' only if it's the first key
+            if (i === 0 && keys[i].toLowerCase() === 'root') continue; // Skip 'root' only if it's the first key
             if (!target) return undefined; // Exit early if target becomes null/undefined
             target = target[keys[i]];
         }
@@ -83,7 +92,7 @@ class KicApp {
         return target;
     }
 
-    #createReactiveProxy(callback, data, currentpath = "kic") {
+    #createReactiveProxy(callback, data, currentpath = "root") {
       
         const handler = {
             get: (target, key) => {
@@ -98,9 +107,9 @@ class KicApp {
 
                 if (typeof value === 'object' && value !== null) 
                 {
-                    if (!Array.isArray(value) && this.#enableKicId && !value.hasOwnProperty('kicId')) 
+                    if (!Array.isArray(value) && this.#enableBareaId && !value.hasOwnProperty('bareaId')) 
                     {
-                            value.kicId = ++this.#kicId;  
+                            value.bareaId = ++this.#bareaId;  
                     }
 
                     return this.#createReactiveProxy(callback, value, newPath); 
@@ -156,28 +165,28 @@ class KicApp {
                 collectDescendants(ce.children[i]);
             }
         }
-        tag.querySelectorAll("[kic-foreach]").forEach(parent => {
+        tag.querySelectorAll("[ba-foreach]").forEach(parent => {
             Array.from(parent.children).forEach(child => collectDescendants(child));
         });
 
 
-        const kicelements = [...tag.querySelectorAll("*")].filter(el => 
-            [...el.attributes].some(attr => attr.name.startsWith("kic-"))
+        const bareaelements = [...tag.querySelectorAll("*")].filter(el => 
+            [...el.attributes].some(attr => attr.name.startsWith("ba-"))
         );
 
-        kicelements.forEach(el => {
-            const kicAttributes = el.getAttributeNames()
-            .filter(attr => attr.startsWith("kic-"))
+        bareaelements.forEach(el => {
+            const bareaAttributes = el.getAttributeNames()
+            .filter(attr => attr.startsWith("ba-"))
             .map(attr => ({ name: attr, value: el.getAttribute(attr) }));
 
             //Skip all children of templates since they will be dealt with later on template rendering
             if (templateChildren.includes(el))
                 return;
 
-            kicAttributes.forEach(attr =>
+            bareaAttributes.forEach(attr =>
             {
    
-                if (['kic-foreach'].includes(attr.name))
+                if (['ba-foreach'].includes(attr.name))
                 {
                     let templateHtml = el.innerHTML.trim()
                         .replace(/>\s+</g, '><')  // Remove spaces between tags
@@ -188,19 +197,19 @@ class KicApp {
                     el.remove();
                 }
 
-                if (['kic-hide', 'kic-show'].includes(attr.name))
+                if (['ba-hide', 'ba-show'].includes(attr.name))
                 {
                     const odo = this.#createDomDictionaryObject(el,null,attr.name,attr.value, "oneway", true,"","",templateId,null);
                     this.#domDictionary.push(odo);
                 }
 
-                if (['kic-bind'].includes(attr.name))
+                if (['ba-bind'].includes(attr.name))
                 {
                     const odo = this.#createDomDictionaryObject(el,null,attr.name,attr.value, "binding", true,"","",templateId,null);
                     this.#domDictionary.push(odo);
                 }
 
-                if (['kic-click'].includes(attr.name)){
+                if (['ba-click'].includes(attr.name)){
                     let expressions=[];
                     expressions.push(attr.value);
                     const odo = this.#createDomDictionaryObject(el,null,attr.name,"", "handler", true,"","",templateId, expressions);
@@ -242,7 +251,7 @@ class KicApp {
         this.#domDictionary = this.#domDictionary.filter(item => item.templateId !== templatedId); 
     }
 
-    #createDomDictionaryObject(element, node, directive, path, kicType, isnew, templateMarkup, templateTagName, templateId, expressions)
+    #createDomDictionaryObject(element, node, directive, path, bareaType, isnew, templateMarkup, templateTagName, templateId, expressions)
     {
         if (!expressions)
         {
@@ -252,24 +261,24 @@ class KicApp {
 
         let id = this.#domDictionaryId++;
 
-        return {id: id, templateId: templateId, element: element, node:node, directive: directive,  path:path, kictype: kicType, isnew: isnew, templateMarkup: templateMarkup, templateTagName: templateTagName, expressions: expressions  };
+        return {id: id, templateId: templateId, element: element, node:node, directive: directive,  path:path, bareatype: bareaType, isnew: isnew, templateMarkup: templateMarkup, templateTagName: templateTagName, expressions: expressions  };
     }
   
 
-    #setupBindings(path='kic') 
+    #setupBindings(path='root') 
     {
 
         let workscope = [];
-        if (path.toLowerCase()=='kic')
-            workscope = this.#domDictionary.filter(p=> p.isnew && ['binding', 'handler'].includes(p.kictype));
+        if (path.toLowerCase()=='root')
+            workscope = this.#domDictionary.filter(p=> p.isnew && ['binding', 'handler'].includes(p.bareatype));
         else
-            workscope= this.#domDictionary.filter(p=> p.isnew && ((p.path.includes(path) && p.kictype==='binding') || p.kictype==='handler'));
+            workscope= this.#domDictionary.filter(p=> p.isnew && ((p.path.includes(path) && p.bareatype==='binding') || p.bareatype==='handler'));
 
     
         workscope.forEach(item => 
         {
 
-            if (item.directive==="kic-bind" && !item.element.dataset.kicBindBound)
+            if (item.directive==="ba-bind" && !item.element.dataset.bareaBindBound)
             {
                 item.isnew = false;
                 item.element.addEventListener("input", (event) => {
@@ -279,7 +288,7 @@ class KicApp {
                     let target = this.#appDataProxy;
 
                     keys.forEach((key, index) => {
-                        if (key.toLowerCase()!=='kic')
+                        if (key.toLowerCase()!=='root')
                         {
                             if (typeof target[key] === 'object') 
                                 target = target[key];
@@ -295,7 +304,7 @@ class KicApp {
 
 
                     const log = this.#getConsoleLog(3);
-                    let customhandler = item.element.getAttribute('kic-bind-handler');
+                    let customhandler = item.element.getAttribute('ba-bind-handler');
                     if (customhandler)
                     {
                         if (customhandler.includes('('));
@@ -335,11 +344,11 @@ class KicApp {
                 });
 
                 // Mark the element as bound
-                item.element.dataset.kicBindBound = "true";  
+                item.element.dataset.bareaBindBound = "true";  
 
             }
 
-            if (item.directive=== "kic-click" && !item.element.dataset.kicClickBound)
+            if (item.directive=== "ba-click" && !item.element.dataset.bareaClickBound)
             {
                 if (!item.expressions)
                     return;
@@ -358,13 +367,13 @@ class KicApp {
                             if (arg === "event") 
                                 return event; // Allow `event` as a parameter
 
-                            const path = this.#getClosestAttribute(event.target, "kic-path"); 
+                            const path = this.#getClosestAttribute(event.target, "ba-path"); 
                             if (path)
                             {
-                                const varname = this.#getClosestAttribute(event.target,"kic-varname"); 
+                                const varname = this.#getClosestAttribute(event.target,"ba-varname"); 
                                 if (arg!=varname)
                                 {
-                                    console.warn(`Error The variable ${arg} used in ${functionName} does not match the kic-foreach expression, should be '${varname}'`);
+                                    console.warn(`Error The variable ${arg} used in ${functionName} does not match the ba-foreach expression, should be '${varname}'`);
                                 }
                                 return this.getPathData(path);
                             }
@@ -382,10 +391,10 @@ class KicApp {
                     });
 
                     // Mark the element as bound
-                    item.element.dataset.kicClickBound = "true";  
+                    item.element.dataset.bareaClickBound = "true";  
 
                 } else {
-                    console.warn(`Invalid kic-click expression: ${handlername}`);
+                    console.warn(`Invalid ba-click expression: ${handlername}`);
                 }
             }
 
@@ -394,7 +403,7 @@ class KicApp {
     }
 
   
-    #renderTemplates(operation='init', path='kic', array=this.#appDataProxy) 
+    #renderTemplates(operation='init', path='root', array=this.#appDataProxy) 
     {
 
         let foreacharray = [];
@@ -404,16 +413,16 @@ class KicApp {
 
         let isSinglePush = operation === "push";
         let templates = [];
-        if (path.toLowerCase()==='kic')
-            templates = this.#domDictionary.filter(p=> p.kictype==='template');
+        if (path.toLowerCase()==='root')
+            templates = this.#domDictionary.filter(p=> p.bareatype==='template');
         else
-            templates = this.#domDictionary.filter(p=> p.path.includes(path) && p.kictype==='template');
+            templates = this.#domDictionary.filter(p=> p.path.includes(path) && p.bareatype==='template');
 
         templates.forEach(template => {
 
             let [varname, datapath] = template.path.split(" in ").map(s => s.trim());
             if (!varname)
-                throw new Error('No variable name was found in the kic-foreach expression');
+                throw new Error('No variable name was found in the ba-foreach expression');
 
             if (!Array.isArray(array))
                 foreacharray = this.getPathData(datapath);
@@ -453,9 +462,9 @@ class KicApp {
                     newtag.innerHTML = template.templateMarkup;
                 }
               
-                newtag.setAttribute("kic-varname", varname);
-                newtag.setAttribute("kic-path", `${datapath}[${counter}]`);
-                newtag.setAttribute("kic-index", counter);
+                newtag.setAttribute("ba-varname", varname);
+                newtag.setAttribute("ba-path", `${datapath}[${counter}]`);
+                newtag.setAttribute("ba-index", counter);
                 if (newtag.id)
                     newtag.id = newtag.id + `-${counter}` 
                 else
@@ -464,25 +473,25 @@ class KicApp {
                 fragment.appendChild(newtag);
                
                 //Add references to click handlers
-                newtag.querySelectorAll("[kic-click]").forEach(el => 
+                newtag.querySelectorAll("[ba-click]").forEach(el => 
                 {
-                    el.setAttribute("kic-varname", varname);
-                    el.setAttribute("kic-path", `${datapath}[${counter}]`);
-                    el.setAttribute("kic-index", counter);
+                    el.setAttribute("ba-varname", varname);
+                    el.setAttribute("ba-path", `${datapath}[${counter}]`);
+                    el.setAttribute("ba-index", counter);
                 });
 
                 //Add references to input bindings
-                newtag.querySelectorAll("[kic-bind]").forEach(el => 
+                newtag.querySelectorAll("[ba-bind]").forEach(el => 
                 {
-                    el.setAttribute("kic-varname", varname);
-                    el.setAttribute("kic-path", `${datapath}[${counter}]`);
-                    el.setAttribute("kic-index", counter);
-                    let attrib = el.getAttribute("kic-bind");
+                    el.setAttribute("ba-varname", varname);
+                    el.setAttribute("ba-path", `${datapath}[${counter}]`);
+                    el.setAttribute("ba-index", counter);
+                    let attrib = el.getAttribute("ba-bind");
                     if (!attrib.includes(varname))
-                        console.warn(`Error The input binding ${attrib} used in an element under kic-foreach does not match the kic-foreach expression, should include '${varname}'`);
+                        console.warn(`Error The input binding ${attrib} used in an element under ba-foreach does not match the ba-foreach expression, should include '${varname}'`);
 
                     let bindingpath = attrib.replace(varname,`${datapath}[${counter}]`);
-                    el.setAttribute("kic-bind", bindingpath);
+                    el.setAttribute("ba-bind", bindingpath);
 
                 });
 
@@ -514,13 +523,13 @@ class KicApp {
         });    
     }
 
-    #applyProxyChangesToDOM(path='kic', value=this.#appDataProxy) 
+    #applyProxyChangesToDOM(path='root', value=this.#appDataProxy) 
     {
       
         //console.log(path, value);
         function interpolate(instance)
         {
-            const interpolations = instance.#domDictionary.filter(p=>p.kictype==="interpolation");
+            const interpolations = instance.#domDictionary.filter(p=>p.bareatype==="interpolation");
             interpolations.forEach(t=>
             {
                 let count=0;
@@ -528,8 +537,8 @@ class KicApp {
                 t.expressions.forEach(expr=> 
                 {
                     //Just to speed up
-                    //If primitive (path), example : kic.model.user.firstname
-                    //Only interpolate kic, kic.model, kic.model.user, kic.model.user.firstname
+                    //If primitive (path), example : root.model.user.firstname
+                    //Only interpolate root, root.model, root.model.user, root.model.user.firstname
                     if (instance.#isPrimitive(value))
                     {
                         if (!path.includes(expr))
@@ -539,7 +548,7 @@ class KicApp {
                     let exprvalue = null;
 
                     if (expr.toLowerCase()=== 'index')
-                        exprvalue = instance.#getClosestAttribute(t.element, 'kic-index');
+                        exprvalue = instance.#getClosestAttribute(t.element, 'ba-index');
                     else
                         exprvalue = instance.getPathData(expr);
 
@@ -565,14 +574,14 @@ class KicApp {
         function updateElements(path, value, instance)
         {
 
-                const kicbind = instance.#domDictionary.filter(p=>p.kictype==="binding" && ((instance.#isPrimitive(value) && (p.path===path)) || (!instance.#isPrimitive(value) && (p.path!==""))) && p.directive==='kic-bind');
-                kicbind.forEach(t=>
+                const bareabind = instance.#domDictionary.filter(p=>p.bareatype==="binding" && ((instance.#isPrimitive(value) && (p.path===path)) || (!instance.#isPrimitive(value) && (p.path!==""))) && p.directive==='ba-bind');
+                bareabind.forEach(t=>
                 {
                     let boundvalue = value;
-                    if (kicbind.length> 1 || !instance.#isPrimitive(boundvalue))
+                    if (bareabind.length> 1 || !instance.#isPrimitive(boundvalue))
                         boundvalue = instance.getPathData(t.path);
 
-                    let customhandler = t.element.getAttribute('kic-bind-handler');
+                    let customhandler = t.element.getAttribute('ba-bind-handler');
                     if (customhandler)
                     {
                         if (customhandler.includes('('));
@@ -608,21 +617,21 @@ class KicApp {
                     }                     
                 });
 
-                const kichide = instance.#domDictionary.filter(p=>p.kictype==="oneway" && ((instance.#isPrimitive(value) && (p.path===path)) || p.path!=="") && p.directive==='kic-hide');
-                kichide.forEach(t=>
+                const bareahide = instance.#domDictionary.filter(p=>p.bareatype==="oneway" && ((instance.#isPrimitive(value) && (p.path===path)) || p.path!=="") && p.directive==='ba-hide');
+                bareahide.forEach(t=>
                 {
                     let boundvalue = value;
-                    if (kichide.length> 1  || !instance.#isPrimitive(boundvalue))
+                    if (bareahide.length> 1  || !instance.#isPrimitive(boundvalue))
                         boundvalue = instance.getPathData(t.path);
 
                     t.element.style.display = boundvalue ? "none" : "";               
                 });
 
-                const kicshow = instance.#domDictionary.filter(p=>p.kictype==="oneway" && ((instance.#isPrimitive(value) && (p.path===path)) || p.path!=="") && p.directive==='kic-show');
-                kicshow.forEach(t=>
+                const bareashow = instance.#domDictionary.filter(p=>p.bareatype==="oneway" && ((instance.#isPrimitive(value) && (p.path===path)) || p.path!=="") && p.directive==='ba-show');
+                bareashow.forEach(t=>
                 {
                     let boundvalue = value;
-                    if (kichide.length> 1  || !instance.#isPrimitive(boundvalue))
+                    if (bareahide.length> 1  || !instance.#isPrimitive(boundvalue))
                         boundvalue = instance.getPathData(t.path);
 
                     t.element.style.display = boundvalue ? "" : "none";
