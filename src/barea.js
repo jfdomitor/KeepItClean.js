@@ -197,7 +197,7 @@ class BareaApp {
                     el.remove();
                 }
 
-                if (['ba-hide', 'ba-show'].includes(attr.name))
+                if (['ba-hide', 'ba-show', 'ba-class'].includes(attr.name))
                 {
                     const odo = this.#createDomDictionaryObject(el,null,attr.name,attr.value, "oneway", true,"","",templateId,null);
                     this.#domDictionary.push(odo);
@@ -480,6 +480,7 @@ class BareaApp {
                     el.setAttribute("ba-index", counter);
                 });
 
+                
                 //Add references to input bindings
                 newtag.querySelectorAll("[ba-bind]").forEach(el => 
                 {
@@ -617,7 +618,7 @@ class BareaApp {
                     }                     
                 });
 
-                const bareahide = instance.#domDictionary.filter(p=>p.bareatype==="oneway" && ((instance.#isPrimitive(value) && (p.path===path)) || p.path!=="") && p.directive==='ba-hide');
+                const bareahide = instance.#domDictionary.filter(p=>p.bareatype==="oneway" && ((instance.#isPrimitive(value) && (p.path===path)) || (!instance.#isPrimitive(value) && (p.path!==""))) && p.directive==='ba-hide');
                 bareahide.forEach(t=>
                 {
                     let boundvalue = value;
@@ -627,7 +628,7 @@ class BareaApp {
                     t.element.style.display = boundvalue ? "none" : "";               
                 });
 
-                const bareashow = instance.#domDictionary.filter(p=>p.bareatype==="oneway" && ((instance.#isPrimitive(value) && (p.path===path)) || p.path!=="") && p.directive==='ba-show');
+                const bareashow = instance.#domDictionary.filter(p=>p.bareatype==="oneway" && ((instance.#isPrimitive(value) && (p.path===path)) || (!instance.#isPrimitive(value) && (p.path!==""))) && p.directive==='ba-show');
                 bareashow.forEach(t=>
                 {
                     let boundvalue = value;
@@ -637,6 +638,19 @@ class BareaApp {
                     t.element.style.display = boundvalue ? "" : "none";
             
                 });
+
+                const bareaclass = instance.#domDictionary.filter(p=>p.bareatype==="oneway" && ((instance.#isPrimitive(value) && (p.path===path)) || (!instance.#isPrimitive(value) && (p.path!==""))) && p.directive==='ba-class');
+                bareaclass.forEach(t=>
+                {
+                    let boundvalue = value;
+                    if (bareahide.length> 1  || !instance.#isPrimitive(boundvalue))
+                        boundvalue = instance.getPathData(t.path);
+
+                    t.element.className = boundvalue || "";
+            
+                });
+
+
            
         }
 

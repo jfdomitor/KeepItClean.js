@@ -24,6 +24,7 @@
                 text-align: left;
                 border: 1px solid black;
             }
+            .redBG {  background-color: red;}
             .infobox {
                 padding: 15px;
                 background-color: lightgray;
@@ -122,6 +123,14 @@
                         </li>
                         <li>Directive: ba-hide: Hide an html element based on a boolean value in your model</li>
                         <li>Directive: ba-show: Show an html element based on a boolean value in your model</li>
+                        <li>Directive: ba-show: Show an html element based on a boolean value in your model</li>
+                        <li>
+                            Directive: ba-class: Show an html element based on a boolean value in your model
+                            <div class="infobox" ba-class="root.settings.myDivClasses">
+                                &lt;div ba-class="root.settings.myDivClasses" &gt;&lt;/div&gt;
+                                <button ba-click="tryClassHandler(event, data)">Try</button>
+                            </div>
+                        </li>
                         <li>Interpolation, example: {{root.model.users[5].firstname}}</li>
                         <li>Tips: Check out the source of this page, all features are used on it.</li>
                     </ul>
@@ -175,32 +184,25 @@
        
     <script src="./src/barea.js"></script>
     <script>
-        var dataset = { model: { description: "List of ramones shows", "shows":[]}};
+        var dataset = { model: { description: "List of Ramones shows", "shows":[]}, settings:{ myDivClasses: "infobox" }};
         dataset.model.shows = getRamonesShows();
-        dataset.description = "barea.js (Basic Reactivity) is a small reactive java script, it can be use to list ramones shows and hopefully other things :)";
-        dataset.features = [];
-        dataset.features.push('Using proxies to react on data changes, like vue3');
-        dataset.features.push('Super light, less than 50Kb unminified');
-        dataset.features.push('Fast');
-        dataset.features.push('Directive: ba-bind: Bind ui controls to your model');
-        dataset.features.push('Directive: ba-bind-handler: Override binding logic for complex ui controls');
-        dataset.features.push('Directive: ba-click: Run functions');
-        dataset.features.push('Directive: ba-foreach: A template directive to create new html based on an array in your model');
-        dataset.features.push('Directive: ba-hide: Hide an html element based on a boolean value in your model');
-        dataset.features.push('Directive: ba-show: Show an html element based on a boolean value in your model');
-        dataset.features.push('Interpolation, example: {{root.model.users[5].firstname}}');
-        dataset.features.push('Tips: Check out the source of this page, all features are used on it.');
+        dataset.description = "barea.js (Basic Reactivity) is a small reactive java script, it can be use to list Ramones shows and hopefully other things :)";
         dataset.edit = false;
         var appElement = document.getElementById("app");
         var bareaapp = getApp(dataset, false);
-
-        //bareaapp.enableConsoleLog(1, true);
+        bareaapp.enableConsoleLog(1, true);
         //bareaapp.enableConsoleLog(4, true);
         //bareaapp.enableInterpolation(false);
         bareaapp.addHandler("editHandler", function(event, data) 
         {
             var t = this.getData();
             t.edit = !t.edit;
+        });
+
+        bareaapp.addHandler("tryClassHandler", function(event) 
+        {
+            var t = this.getData();
+            t.settings.myDivClasses = "infobox redBG";
         });
 
         //Custom binding handler for complex controls
