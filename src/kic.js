@@ -69,6 +69,20 @@ class KicApp {
         }
     }
 
+    getPathData(path) {
+        const keys = path.match(/[^.[\]]+/g);
+        let target = this.#appDataProxy;
+    
+        // Loop with for (faster than forEach)
+        for (let i = 0; i < keys.length; i++) {
+            if (i === 0 && keys[i].toLowerCase() === 'kic') continue; // Skip 'kic' only if it's the first key
+            if (!target) return undefined; // Exit early if target becomes null/undefined
+            target = target[keys[i]];
+        }
+    
+        return target;
+    }
+
     #createReactiveProxy(callback, data, currentpath = "kic") {
       
         const handler = {
@@ -281,6 +295,22 @@ class KicApp {
 
 
                     const log = this.#getConsoleLog(3);
+                    let customhandler = item.element.getAttribute('kic-bind-handler');
+                    if (customhandler)
+                    {
+                        if (customhandler.includes('('));
+                            customhandler = customhandler.split('(')[0];
+                        customhandler=customhandler.trim();
+
+                        if (this.#eventHandlers[customhandler]) {
+                            this.#eventHandlers[customhandler].apply(this, ['SET_DATA', item.element, target]);
+                        } else {
+                            console.warn(`Handler function '${customhandler}' not found.`);
+                        }
+                        return;
+                    }
+
+
                     if (item.element.type === "checkbox") 
                     {
                         if (log.active)
@@ -328,18 +358,18 @@ class KicApp {
                             if (arg === "event") 
                                 return event; // Allow `event` as a parameter
 
-                            const path = event.target.getAttribute("kic-path"); 
+                            const path = this.#getClosestAttribute(event.target, "kic-path"); 
                             if (path)
                             {
-                                const varname = event.target.getAttribute("kic-varname"); 
+                                const varname = this.#getClosestAttribute(event.target,"kic-varname"); 
                                 if (arg!=varname)
                                 {
                                     console.warn(`Error The variable ${arg} used in ${functionName} does not match the kic-foreach expression, should be '${varname}'`);
                                 }
-                                return this.#getValueByPath(path);
+                                return this.getPathData(path);
                             }
                             else
-                                return this.#getValueByPath(arg);
+                                return this.getPathData(arg);
 
                         });
                         
@@ -382,9 +412,11 @@ class KicApp {
         templates.forEach(template => {
 
             let [varname, datapath] = template.path.split(" in ").map(s => s.trim());
+            if (!varname)
+                throw new Error('No variable name was found in the kic-foreach expression');
 
             if (!Array.isArray(array))
-                foreacharray = this.#getValueByPath(datapath);
+                foreacharray = this.getPathData(datapath);
             else
                 foreacharray= array;
 
@@ -424,7 +456,11 @@ class KicApp {
                 newtag.setAttribute("kic-varname", varname);
                 newtag.setAttribute("kic-path", `${datapath}[${counter}]`);
                 newtag.setAttribute("kic-index", counter);
-                newtag.dataset.kicIndex = counter;
+                if (newtag.id)
+                    newtag.id = newtag.id + `-${counter}` 
+                else
+                    newtag.id = `${template.id}-${varname}-${counter}`; 
+
                 fragment.appendChild(newtag);
                
                 //Add references to click handlers
@@ -448,9 +484,23 @@ class KicApp {
                     let bindingpath = attrib.replace(varname,`${datapath}[${counter}]`);
                     el.setAttribute("kic-bind", bindingpath);
 
+                });
 
+                let templatechildren = newtag.querySelectorAll("*"); 
+                templatechildren.forEach(child => 
+                {
+                    if (child.id)
+                        child.id = child.id + `-${counter}` 
+                    else
+                        child.id = `${varname}-${counter}`; 
+
+                    let forattrib = child.getAttribute("for");
+                    if (forattrib)
+                        child.setAttribute("for", forattrib + `-${counter}`); 
+                   
 
                 });
+    
 
                 this.#buildDomDictionary(newtag, template.id);
 
@@ -491,7 +541,7 @@ class KicApp {
                     if (expr.toLowerCase()=== 'index')
                         exprvalue = instance.#getClosestAttribute(t.element, 'kic-index');
                     else
-                        exprvalue = instance.#getValueByPath(expr);
+                        exprvalue = instance.getPathData(expr);
 
                     if (!exprvalue)
                         exprvalue ="";
@@ -515,21 +565,45 @@ class KicApp {
         function updateElements(path, value, instance)
         {
 
-                const kicbind = instance.#domDictionary.filter(p=>p.kictype==="binding" && ((instance.#isPrimitive(value) && (p.path===path)) || p.path!=="") && p.directive==='kic-bind');
+                const kicbind = instance.#domDictionary.filter(p=>p.kictype==="binding" && ((instance.#isPrimitive(value) && (p.path===path)) || (!instance.#isPrimitive(value) && (p.path!==""))) && p.directive==='kic-bind');
                 kicbind.forEach(t=>
                 {
                     let boundvalue = value;
                     if (kicbind.length> 1 || !instance.#isPrimitive(boundvalue))
-                        boundvalue = instance.#getValueByPath(t.path);
+                        boundvalue = instance.getPathData(t.path);
 
-                    if (!boundvalue)
-                        boundvalue="";
+                    let customhandler = t.element.getAttribute('kic-bind-handler');
+                    if (customhandler)
+                    {
+                        if (customhandler.includes('('));
+                            customhandler = customhandler.split('(')[0];
+                        customhandler=customhandler.trim();
 
-                    if (t.element.type === "checkbox") {
+                        if (instance.#eventHandlers[customhandler]) {
+                            instance.#eventHandlers[customhandler].apply(this, ['SET_UI', t.element, boundvalue]);
+                        } else {
+                            console.warn(`Handler function '${customhandler}' not found.`);
+                        }
+                        return;
+                    }
+
+
+                    if (t.element.type === "checkbox") 
+                    {
+                        if (!boundvalue)
+                            boundvalue=false;
+
                         t.element.checked = boundvalue;
-                    } else if (t.element.type === "radio") {
+                    } 
+                    else if (t.element.type === "radio")
+                    {
                         t.element.checked = t.element.value === boundvalue;
-                    } else {
+                    } 
+                    else 
+                    {
+                        if (!boundvalue)
+                            boundvalue="";
+
                         t.element.value = boundvalue;
                     }                     
                 });
@@ -539,7 +613,7 @@ class KicApp {
                 {
                     let boundvalue = value;
                     if (kichide.length> 1  || !instance.#isPrimitive(boundvalue))
-                        boundvalue = instance.#getValueByPath(t.path);
+                        boundvalue = instance.getPathData(t.path);
 
                     t.element.style.display = boundvalue ? "none" : "";               
                 });
@@ -549,7 +623,7 @@ class KicApp {
                 {
                     let boundvalue = value;
                     if (kichide.length> 1  || !instance.#isPrimitive(boundvalue))
-                        boundvalue = instance.#getValueByPath(t.path);
+                        boundvalue = instance.getPathData(t.path);
 
                     t.element.style.display = boundvalue ? "" : "none";
             
@@ -565,22 +639,28 @@ class KicApp {
 
     }
 
-   
+    /*** Internal Helpers ***/
 
-    #getValueByPath(path) {
-        const keys = path.match(/[^.[\]]+/g);
-        let target = this.#appDataProxy;
-    
-        // Loop with for (faster than forEach)
-        for (let i = 0; i < keys.length; i++) {
-            if (i === 0 && keys[i].toLowerCase() === 'kic') continue; // Skip 'kic' only if it's the first key
-            if (!target) return undefined; // Exit early if target becomes null/undefined
-            target = target[keys[i]];
+   
+    #getClosestAttribute(element, name)
+    {
+        let val = element.getAttribute(name);
+        let p = element.parentElement;
+        let safecnt=0;
+        while (!val && p)
+        {
+            safecnt++;
+            val = p.getAttribute(name);
+            p=p.parentElement;
+            if (safecnt>10)
+                break;
         }
+
+        return val || "";
     
-        return target;
     }
 
+   
     //Get interpolation data paths from a string found in the dom
     #getInterpolationPaths(str) {
         const regex = /{{(.*?)}}/g;
@@ -657,23 +737,7 @@ class KicApp {
         return log;
     }
 
-    #getClosestAttribute(element, name)
-    {
-        let idx = element.getAttribute(name);
-        let p = element.parentElement;
-        let safecnt=0;
-        while (!idx && p)
-        {
-            safecnt++;
-            idx = p.getAttribute('kic-index');
-            p=p.parentElement;
-            if (safecnt>100)
-                break;
-        }
-
-        return idx || "";
-    
-    }
+  
                    
       
     

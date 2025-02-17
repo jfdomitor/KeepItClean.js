@@ -24,6 +24,63 @@
                 text-align: left;
                 border: 1px solid black;
             }
+            .star-rating {
+                display: flex;
+                flex-direction: row;
+                gap: 10px; /* Space between stars */
+            }
+
+            .star-rating input {
+               display: none; /* Hide checkboxes */
+            }
+
+            .star-rating label {
+                font-size: 2rem; /* Size of stars */
+                cursor: pointer;
+                transition: color 0.3s;
+            }
+
+            /* Default star (unchecked) */
+                .star-rating input + label::before {
+                content: "☆";
+                color: #999; /* Gray color */
+            }
+
+            /* Checked star (filled) */
+                .star-rating input:checked + label::before {
+                content: "★";
+                color: gold; /* Gold color for checked stars */
+            }
+
+            .beautiful-btn {
+                background: linear-gradient(135deg, #6e8efb, #a777e3);
+                color: white;
+                padding: 12px 24px;
+                font-size: 18px;
+                font-weight: bold;
+                border: none;
+                border-radius: 30px;
+                cursor: pointer;
+                transition: all 0.3s ease;
+                text-transform: uppercase;
+                letter-spacing: 1px;
+                box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.2);
+                outline: none;
+                display: inline-block;
+            }
+
+            /* Hover Effect */
+            .beautiful-btn:hover {
+                background: linear-gradient(135deg, #5a7ef5, #955de1);
+                box-shadow: 0px 6px 15px rgba(0, 0, 0, 0.3);
+                transform: translateY(-2px);
+            }
+
+            /* Active (Click) Effect */
+            .beautiful-btn:active {
+                transform: translateY(2px);
+                box-shadow: 0px 2px 5px rgba(0, 0, 0, 0.2);
+            }
     </style>
 </head>
 <body>
@@ -46,8 +103,8 @@
                 </div>
 
                 <div class="box2">
-                    <h4>{{kic.model.description}} <b>(kic-foreach)</b></h4>
-                    <button kic-click="editHandler(event, show)">Edit Notes <b>(kic-hide, kic-show)</b></button>
+                    <h1>{{kic.model.description}} <b>(kic-foreach)</b></h1>
+                    <button class="beautiful-btn" kic-click="editHandler(event, show)">Edit Notes <b>(kic-hide, kic-show)</b></button>
                     <br />
                     <br />
                     <table>
@@ -55,8 +112,9 @@
                             <tr>
                                 <td width="5%"><b>Index</b></td>
                                 <td width="20%"><b>Date</b></td>
-                                <td width="20%"><span kic-hide="kic.edit"><b>Note (Interpolation)</b></span><span kic-show="kic.edit"><b>Note (kic-bind)</b></span></td>
+                                <td width="20%"><span kic-hide="kic.edit"><b>Note</b></span><span kic-show="kic.edit"><b>Note (kic-bind)</b></span></td>
                                 <td width="20%"><b>Rate</b></td>
+                                <td></td>
                             </tr>
                         </thead>
                         <tbody>
@@ -67,8 +125,21 @@
                                     <span kic-hide="kic.edit">{{show.Note}}</span>
                                     <span kic-show="kic.edit"><input type="text" kic-bind="show.Note" /></span>
                                 </td>
-                                <td></td>
-
+                                <td>
+                                    <div class="star-rating" kic-bind="show.Rating" kic-bind-handler="rateHandler(verb, element, data)">
+                                        <input type="checkbox" id="star1" name="rating" value="1" >
+                                        <label for="star1"></label>
+                                        <input type="checkbox" id="star2" name="rating" value="2" >
+                                        <label for="star2"></label>
+                                        <input type="checkbox" id="star3" name="rating" value="3" >
+                                        <label for="star3"></label>
+                                        <input type="checkbox" id="star4" name="rating" value="4" >
+                                        <label for="star4"></label>
+                                        <input type="checkbox" id="star5" name="rating" value="5" >
+                                        <label for="star5"></label>
+                                      </div>
+                                </td>
+                                <td>{{show}}</td>
                             </tr>
                         </tbody>
                     </table>
@@ -105,6 +176,36 @@
             t.edit = !t.edit;
         });
 
+        //Custom binding handler for complex controls
+        kicapp.addHandler("rateHandler", function(verb, element, data) 
+        {
+           if (verb === 'SET_DATA')
+           {
+                let checkboxes = element.querySelectorAll('input[type="checkbox"]');
+                let points = 0;
+                checkboxes.forEach(checkbox => {
+                if (checkbox.checked) 
+                    points = checkbox.value;
+                });
+
+                data.Rating = points;
+           }
+           if (verb === 'SET_UI')
+           {
+                //let path = element.getAttribute('kic-path');
+                //let data = this.getPathData(path);
+                let checkboxes = element.querySelectorAll('input[type="checkbox"]');
+                let index = 1;
+                checkboxes.forEach(checkbox => {
+                    checkbox.checked=false;
+                    if (index<= data)
+                        checkbox.checked=true;
+               
+                    index++;
+                });
+           }
+        });
+
         kicapp.mount(appElement);
 
 
@@ -124,17 +225,20 @@
                 "Note2": "Angel & the Snake"
             },
             {
-                "Date": "August 17, 1974"
+                "Date": "August 17, 1974",
+                "Rating": 5
             },
             {
                 "Date": "August 24, 1974",
-                "Note": ""
+                "Note": "",
+                "Rating": 3
             },
             {
                 "Date": "August 25, 1974"
             },
             {
-                "Date": "August 29, 1974"
+                "Date": "August 29, 1974",
+                "Rating": 4
             },
             {
                 "Date": "August 30, 1974"
