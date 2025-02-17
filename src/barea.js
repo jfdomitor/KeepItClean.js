@@ -54,8 +54,8 @@ class BareaApp {
         this.#setupBindings();
         this.#applyProxyChangesToDOM();
 
-        if (this.#enableBareaId && ! this.#appDataProxy.hasOwnProperty('bareaId')) 
-            this.#appDataProxy.bareaId = ++this.#bareaId;  // Assign a new unique ID
+        if (this.#enableBareaId && ! this.#appDataProxy.hasOwnProperty('baId')) 
+            this.#appDataProxy.baId = ++this.#bareaId;  // Assign a new unique ID
    
     }
 
@@ -107,9 +107,9 @@ class BareaApp {
 
                 if (typeof value === 'object' && value !== null) 
                 {
-                    if (!Array.isArray(value) && this.#enableBareaId && !value.hasOwnProperty('bareaId')) 
+                    if (!Array.isArray(value) && this.#enableBareaId && !value.hasOwnProperty('baId')) 
                     {
-                            value.bareaId = ++this.#bareaId;  
+                            value.baId = ++this.#bareaId;  
                     }
 
                     return this.#createReactiveProxy(callback, value, newPath); 
